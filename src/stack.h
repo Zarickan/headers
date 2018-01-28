@@ -20,7 +20,6 @@ stack_init(Stack* stack, u32 size) {
     
     memset(stack, 0, sizeof(u32) * 2); // NOTE (Frederik): Sets first 2 fields to 0
     stack->capacity = size;
-    
 }
 
 inline Stack*
@@ -56,8 +55,8 @@ stack_pop(Stack* stack) {
     void* element = stack->buffer[stack->position];
     stack->buffer[stack->position] = NULL;
     
-    u32 capacity = stack->capacity / 4;
-    if(stack->position < capacity && capacity > 0) {
+    u32 capacity = stack->capacity / 2;
+    if(stack->position < (capacity / 2) && capacity > 0) {
         stack->buffer = realloc(stack->buffer, sizeof(void*) * capacity);
         stack->capacity = capacity;
     }
