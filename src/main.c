@@ -2,11 +2,12 @@
 #include "types.h"
 #include "stack.h"
 #include "list.h"
+#include "linkedlist.h"
 
 int main(int argc, char** argv)
 {
-    List list;
-    list_init(&list, 4);
+    LinkedList list;
+    linkedlist_init(&list);
     
     v3 vec1, vec2, vec3, vec4, vec5;
     
@@ -30,27 +31,39 @@ int main(int argc, char** argv)
     vec5.y = 2.234f;
     vec5.z = 3.234f;
     
-    list_add(&list, &vec1);
-    list_add(&list, &vec2);
-    list_add(&list, &vec3);
-    list_add(&list, &vec4);
-    list_add(&list, &vec5);
+    ListNode n1, n2, n3, n4, n5;
+    listnode_init(&n1, &vec1);
+    listnode_init(&n2, &vec2);
+    listnode_init(&n3, &vec3);
+    listnode_init(&n4, &vec4);
+    listnode_init(&n5, &vec5);
     
+    linkedlist_add(&list, &n1);
+    linkedlist_add(&list, &n2);
+    linkedlist_add(&list, &n3);
+    linkedlist_add(&list, &n4);
+    linkedlist_add(&list, &n5);
+    
+    printf("Size %i\n", list.size);
     printf("List contains:\n");
-    for(u32 i = 0; i < list.size; i++) {
-        v3* el = (v3*) list.elements[i];
-        printf("Element %i is: {%f, %f, %f} \n", i, el->x, el->y, el->z);
+    ListNode* node = list.head; 
+    while(node != NULL) {
+        v3* el = (v3*) node->value;
+        printf("Element is: {%f, %f, %f} \n", el->x, el->y, el->z);
+        
+        node = (ListNode*) node->next;
     }
     
-    v3* removed = (v3*) list_remove(&list, 2);
-    printf("Removed {%f, %f, %f} at index 2\n\n", removed->x, removed->y, removed->z);
+    linkedlist_remove(&list, &n4);
     
-    printf("Size %i, capacity %i\n", list.size, list.capacity);
-    
-    printf("List now contains:\n");
-    for(u32 c = 0; c < list.size; c++) {
-        v3* el = (v3*) list.elements[c];
-        printf("Element %i is: {%f, %f, %f} \n", c, el->x, el->y, el->z);
+    printf("Size %i\n", list.size);
+    printf("List contains:\n");
+    node = list.head; 
+    while(node != NULL) {
+        v3* el = (v3*) node->value;
+        printf("Element is: {%f, %f, %f} \n", el->x, el->y, el->z);
+        
+        node = (ListNode*) node->next;
     }
     
     printf("Hello world!\n");
