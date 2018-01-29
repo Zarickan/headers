@@ -7,5 +7,5 @@ fkey_command_win[6] = {"build.bat", "*compilation*", true , true };
 fkey_command_linux[1] = {"./build.sh", "*compilation*", true , true };
 fkey_command_linux[2] = {"output/test", "*run*", false , true };
 
-fkey_command_mac[1] = {"./build.sh", "*compilation*", true , true };
+fkey_command_mac[1] = {"clang src/main.c -o output/test -std=c99", "*compilation*", true , true };
 fkey_command_mac[2] = {"output/test", "*run*", false , true };
