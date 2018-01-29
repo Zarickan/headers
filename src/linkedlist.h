@@ -12,17 +12,17 @@ typedef struct ListNode {
     void* next;
 } ListNode;
 
-inline void
+static inline void
 listnode_init(ListNode* node, void* value) {
     node->prev = NULL;
     node->next = NULL;
     node->value = value;
 }
 
-inline ListNode*
+static inline ListNode*
 listnode_create(void* value) {
     ListNode* node = (ListNode*) malloc(sizeof(ListNode));
-    node_init(node, value);
+    listnode_init(node, value);
     
     return node;
 }
@@ -33,14 +33,14 @@ typedef struct LinkedList {
     ListNode* tail;
 } LinkedList;
 
-inline void
+static inline void
 linkedlist_init(LinkedList* list) {
     list->size = 0;
     list->head = NULL;
     list->tail = NULL;
 }
 
-inline LinkedList*
+static inline LinkedList*
 linkedlist_create() {
     LinkedList* list = (LinkedList*) malloc(sizeof(LinkedList));
     linkedlist_init(list);
@@ -48,7 +48,7 @@ linkedlist_create() {
     return list;
 }
 
-inline void
+static inline void
 linkedlist_add(LinkedList* list, ListNode* node) {
     if(list->size == 0) {
         node->next = NULL;
@@ -77,7 +77,7 @@ linkedlist_add(LinkedList* list, ListNode* node) {
     list->size++;
 }
 
-inline void
+static inline void
 linkedlist_remove(LinkedList* list, ListNode* node) {
     if(list->tail == node) {
         list->tail = node->prev;

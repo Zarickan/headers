@@ -13,7 +13,7 @@ typedef struct List {
     void** elements;
 } List;
 
-inline void
+static inline void
 list_init(List* list, u32 size) {
     list->elements = (void*) malloc(sizeof(void*) * size);
     
@@ -21,7 +21,7 @@ list_init(List* list, u32 size) {
     list->capacity = size;
 }
 
-inline List*
+static inline List*
 list_create(u32 size) {
     List* list = (List*) malloc(sizeof(List));
     list_init(list, size);
@@ -29,7 +29,7 @@ list_create(u32 size) {
     return list;
 }
 
-inline void
+static inline void
 list_add(List* list, void* element) {
     if(list->size > list->capacity - 1) {
         assert(list->capacity * 2 <= UINT32_MAX);
@@ -43,7 +43,7 @@ list_add(List* list, void* element) {
     list->size++;
 }
 
-inline void*
+static inline void*
 list_remove(List* list, u32 index) {
     assert(index < list->size);
     void* element = list->elements[index];

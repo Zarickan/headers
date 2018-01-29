@@ -13,15 +13,15 @@ typedef struct Stack {
     void** buffer;
 } Stack;
 
-inline void
+static inline void
 stack_init(Stack* stack, u32 size) {
     stack->buffer = (void*) malloc(sizeof(void*) * size);
     
-    memset(stack, 0, sizeof(u32) * 2); // NOTE (Frederik): Sets first 2 fields to 0
+    stack->size = 0;
     stack->capacity = size;
 }
 
-inline Stack*
+static inline Stack*
 stack_create(u32 size) { 
     Stack* stack = (Stack*) malloc(sizeof(Stack));
     stack_init(stack, size);
@@ -29,7 +29,7 @@ stack_create(u32 size) {
     return stack;
 }
 
-inline void
+static inline void
 stack_push(Stack* stack, void* element) {
     if(stack->size > stack->capacity - 1) {
         assert(stack->capacity * 2 <= UINT32_MAX);
@@ -44,7 +44,7 @@ stack_push(Stack* stack, void* element) {
 }
 
 
-inline void*
+static inline void*
 stack_pop(Stack* stack) {
     assert(stack->size >= 1);
     
@@ -61,7 +61,7 @@ stack_pop(Stack* stack) {
     return element;
 }
 
-inline void*
+static inline void*
 stack_peek(Stack* stack) {
     return stack->buffer[stack->size - 1];
 }

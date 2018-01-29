@@ -6,29 +6,29 @@
 #ifndef HEAPS_H
 #define HEAPS_H
 
-inline u32
+static inline u32
 parent(u32 index) {
     return (index + 1) / 2 - 1;
 }
 
-inline u32
+static inline u32
 right(u32 index) {
     return 2 * (index + 1);
 }
 
-inline u32
+static inline u32
 left(u32 index) {
     return 2 * (index + 1) - 1;
 }
 
-inline void
+static inline void
 exchange(f32* array, u32 src, u32 dst) {
     f32 temp = array[src];
     array[src] = array[dst];
     array[dst] = temp;
 }
 
-inline void
+static inline void
 max_Heapify(f32* array, u32 size, u32 index) {
     u32 l = left(index);
     u32 r = right(index);
@@ -47,14 +47,14 @@ max_Heapify(f32* array, u32 size, u32 index) {
     }
 }
 
-inline void
+static inline void
 build_max_heap(f32* array, u32 size) {
     for(u32 i = size / 2 - 1; i > 0; i--) {
         max_heapify(array, size, i);
     }
 }
 
-inline void
+static inline void
 heapsort(f32* array, u32 size) {
     build_max_heap(array, size);
     
