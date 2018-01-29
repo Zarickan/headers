@@ -29,7 +29,7 @@ exchange(f32* array, u32 src, u32 dst) {
 }
 
 static inline void
-max_Heapify(f32* array, u32 size, u32 index) {
+max_heapify(f32* array, u32 size, u32 index) {
     u32 l = left(index);
     u32 r = right(index);
     
@@ -49,18 +49,18 @@ max_Heapify(f32* array, u32 size, u32 index) {
 
 static inline void
 build_max_heap(f32* array, u32 size) {
-    for(u32 i = size / 2 - 1; i > 0; i--) {
+    for(u32 i = (size / 2); i --> 0;) {
         max_heapify(array, size, i);
     }
 }
 
 static inline void
-heapsort(f32* array, u32 size) {
+heap_sort(f32* array, u32 size) {
     build_max_heap(array, size);
     
-    for(u32 i = size - 1; i > 1; i--) {
+    for(u32 i = size - 1; i --> 1;) {
         exchange(array, 0, i);
-        max_heapify(array, size, 0);
+        max_heapify(array, size - (size - 1 -i), 0);
     }
 }
 
