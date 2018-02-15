@@ -5,23 +5,54 @@
 #include "linkedlist.h"
 #include "heaps.h"
 #include "memory.h"
+#include "formats/cursor.h"
 
 int main(int argc, char** argv)
 {
-    MemoryBlock* block = block_prealloc(1024*1024*1024);
-    f32* blockArray = block_alloc(block, sizeof(f32) * 64);
+    printf("before file\n");
+    FILE* file = fopen("file.cur", "r+");
+    printf("after file\n");
     
-    for(u8 i = 0; i < 64; i++) {
-        blockArray[i] = i * 10.364819f;
+    // Read header
+    CursorHeader header;
+    fread(&header, sizeof(CursorHeader), 1, file);
+    printf("Cursor header:\n");
+    printf("  reserved:   0x%#u\n", (u16) (header.reserved[0] + header.reserved[1]));
+    printf("  imageType:  0x%#u\n", header.imageType);
+    printf("  imageCount: 0x%#u\n", header.imageCount);
+    
+    // Read entries
+    CursorEntry* entries = malloc(sizeof(CursorEntry) * header.imageCount);
+    for(u16 i = 0; i < header.imageCount; i++) {
+        fread(&entries[i], sizeof(CursorEntry), 1, file);
+        
+        CursorEntry entry = entries[i];
+        printf("Cursor entry:\n");
+        printf("  width:        0x%#u\n", entry.width);
+        printf("  height:       0x%#u\n", entry.height);
+        printf("  paletteSize:  0x%#u\n", entry.paletteSize);
+        printf("  reserved:     0x%#u\n", entry.reserved);
+        printf("  hotspotLeft:  0x%#u\n", entry.hotspotLeft);
+        printf("  hotspotRight: 0x%#u\n", entry.hotspotRight);
+        printf("  size:         0x%#u\n", entry.size);
+        printf("  offset:       0x%#u\n", entry.offset);
     }
     
-    
-    printf("Array is at %lu with:\n", (intptr) blockArray);
-    for(u8 i = 0; i < 64; i++) {
-        printf("%lu has %f\n", (intptr) &(blockArray[i]), blockArray[i]);
+    // Extract individual image data
+    for(u16 i = 0; i < header.imageCount; i++) {
+        CursorEntry* entry = &entries[i];
+        void* imageData = malloc(entry->size);
+        
+        fseek(file, entry->offset, SEEK_SET);
+        fread(imageData, 1, entry->size, file);
+        
+        char outname[128];
+        sprintf(outname, "output-%ix%i.bmp", entry->width, entry->height);
+        
+        FILE* outputFile = fopen(outname, "wb");
+        fwrite(imageData, 1, entry->size, outputFile);
+        fclose(outputFile);
     }
-    
-    printf("Hello world!\n");
     
     return 0;
 }
