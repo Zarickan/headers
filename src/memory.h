@@ -28,7 +28,7 @@ block_alloc(MemoryBlock* block, u64 size) {
     assert(block->position + size < block->size);
     
     block->position += size;
-    return block->memory + (block->position - size);
+    return (void*) ((u8*) block->memory + (block->position - size)); // NOTE: We do pointer addition on a 1 byte basis (hence the cast to u8*)
 }
 
 static inline void
