@@ -35,7 +35,7 @@ stack_push(Stack* stack, void* element) {
         assert(stack->capacity * 2 <= UINT32_MAX);
         
         u32 capacity = stack->capacity * 2;
-        stack->buffer = realloc(stack->buffer, sizeof(void*) * capacity);
+        stack->buffer = (void**) realloc(stack->buffer, sizeof(void*) * capacity);
         stack->capacity = capacity;
     }
     

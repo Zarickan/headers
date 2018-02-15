@@ -4,34 +4,24 @@
 #include "list.h"
 #include "linkedlist.h"
 #include "heaps.h"
+#include "memory.h"
 
 int main(int argc, char** argv)
 {
-    const u32 size = 10;
-    f32 array[] = { 4, 3, 7, 3, 8, 2, 9, 10, 5, 1 };
+    MemoryBlock* block = block_prealloc(1024*1024*1024);
+    f32* blockArray = block_alloc(block, sizeof(f32) * 64);
     
-    printf("[\n");
-    for(u32 i = 0; i < size; i++) {
-        printf("%f, \n", array[i]);
+    for(u8 i = 0; i < 64; i++) {
+        blockArray[i] = i * 10.364819f;
     }
-    printf("]\n");
     
-    //build_max_heap(array, size);
     
-    printf("[\n");
-    for(u32 i = 0; i < size; i++) {
-        printf("%f, \n", array[i]);
+    printf("Array is at %lu with:\n", (intptr) blockArray);
+    for(u8 i = 0; i < 64; i++) {
+        printf("%lu has %f\n", (intptr) &(blockArray[i]), blockArray[i]);
     }
-    printf("]\n");
-    
-    heap_sort(array, size);
-    
-    printf("[\n");
-    for(u32 i = 0; i < size; i++) {
-        printf("%f, \n", array[i]);
-    }
-    printf("]\n");
     
     printf("Hello world!\n");
+    
     return 0;
 }
