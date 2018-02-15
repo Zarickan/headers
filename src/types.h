@@ -75,4 +75,38 @@ typedef union v3
     f32 E[3];
 } v3;
 
+// v2, +-*/% operations
+static inline v2
+v2_add(v2* result, v2 left, v2 right) {
+    result->x = left.x + right.x;
+    result->y = left.y + right.y;
+}
+static inline v2
+v2_sub(v2* result, v2 left, v2 right) {
+    result->x = left.x + right.x;
+    result->y = left.y + right.y;
+}
+static inline v2
+v2_mul(v2* result, v2 left, v2 right) {
+    result->x = left.x * right.x;
+    result->y = left.y * right.y;
+}
+static inline v2
+v2_div(v2* result, v2 left, v2 right) {
+    result->x = left.x / right.x;
+    result->y = left.y / right.y;
+}
+
+// v2 functions
+static inline f32
+v2_magnitude(v2 vector) {
+    return 1.0 / sqrt(pow(vector.x, 2) + pow(vector.y, 2));
+}
+static inline void
+v2_normalize(v2 vector) {
+    f32 magnitude = v2_magnitude(vector);
+    vector.x *= magnitude;
+    vector.y *= magnitude;
+}
+
 #endif // TYPES_H
