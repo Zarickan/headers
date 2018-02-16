@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <math.h>
 
 #ifndef TYPES_H
 #define TYPES_H
@@ -76,22 +77,22 @@ typedef union v3
 } v3;
 
 // v2, +-*/% operations
-static inline v2
+static inline void
 v2_add(v2* result, v2 left, v2 right) {
     result->x = left.x + right.x;
     result->y = left.y + right.y;
 }
-static inline v2
+static inline void
 v2_sub(v2* result, v2 left, v2 right) {
     result->x = left.x + right.x;
     result->y = left.y + right.y;
 }
-static inline v2
+static inline void
 v2_mul(v2* result, v2 left, v2 right) {
     result->x = left.x * right.x;
     result->y = left.y * right.y;
 }
-static inline v2
+static inline void
 v2_div(v2* result, v2 left, v2 right) {
     result->x = left.x / right.x;
     result->y = left.y / right.y;
