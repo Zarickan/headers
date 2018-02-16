@@ -23,6 +23,11 @@ left(u32 index) {
 
 static inline void
 exchange(f32* array, u32 src, u32 dst) {
+    for(u32 i = 0; i < 6; i++) {
+        printf("%f, \n", array[i]);
+    }
+    printf("]\n");
+    
     f32 temp = array[src];
     array[src] = array[dst];
     array[dst] = temp;
@@ -34,10 +39,10 @@ max_heapify(f32* array, u32 size, u32 index) {
     u32 r = right(index);
     
     u32 largest = index;
-    if(l <= size && array[l] > array[index]) {
+    if(l < size && array[l] > array[index]) {
         largest = l;
     }
-    if(r <= size && array[r] > array[largest]) {
+    if(r < size && array[r] > array[largest]) {
         largest = r;
     }
     
@@ -58,9 +63,11 @@ static inline void
 heap_sort(f32* array, u32 size) {
     build_max_heap(array, size);
     
+    u32 heapsize = size;
     for(u32 i = size - 1; i --> 1;) {
         exchange(array, 0, i);
-        max_heapify(array, size - (size - 1 -i), 0);
+        heapsize--;
+        max_heapify(array, heapsize, 0);
     }
 }
 
