@@ -29,4 +29,17 @@ typedef struct CursorEntry {
     u32 offset;
 } CursorEntry;
 
+static inline void
+cursor_read_header(FILE* file, CursorHeader* header) {
+    fread(header, sizeof(CursorHeader), 1, file);
+}
+static inline void
+cursor_read_entries(FILE* file, CursorHeader* header, CursorEntry* entries) {
+    entries = malloc(sizeof(CursorEntry) * header->imageCount);
+    
+    for(u16 i = 0; i < header->imageCount; i++) {
+        fread(&entries[i], sizeof(CursorEntry), 1, file);
+    }
+}
+
 #endif // CURSOR_H
