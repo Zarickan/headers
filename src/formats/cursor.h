@@ -47,15 +47,32 @@ cur_read_entries(CursorHeader* header, FILE* file) {
         fread(entry, sizeof(CursorEntry), 1, file);
     }
     
-    for(u16 i = 0; i < header->imageCount; i++) {
-        CursorEntry entry = entries[i];
-        void* imageData = malloc(entry.size);
-        
-        fseek(file, entry.offset, SEEK_SET);
-        fread(imageData, entry.size, 1, file);
-    }
-    
     return entries;
+}
+
+static inline CursorEntry*
+cur_read(CursorHeader* header, FILE* file) {
+    cur_read_header(header, file);
+    return cur_read_entries(header, file);
+}
+
+static inline void
+cur_write_header(CursorHeader* header, FILE* file) {
+    fwrite(header, sizeof(CursorHeader), 1, file);
+}
+
+static inline void
+cur_write_entries(CursorHeader* header, CursorEntry* entries, FILE* file) {
+    for(u16 i = 0; i < header->imageCount; i++) {
+        CursorEntry* entry = &entries[i];
+        fwrite(entry, sizeof(CursorEntry), 1, file);
+    }
+}
+
+static inline void
+cur_write(CursorHeader* header, CursorEntry* entries, FILE* file) {
+    cur_write_header(header, file);
+    cur_write_entries(header, entries, file);
 }
 
 #endif // CURSOR_H

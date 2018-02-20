@@ -34,5 +34,8 @@ int main(int argc, char** argv)
         printf("  offset:       0x%#u\n", entry.offset);
     }
     
+    fclose(file);
+    free(entries);
+    
     exit(0);
 }

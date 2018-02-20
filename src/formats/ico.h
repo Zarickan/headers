@@ -47,15 +47,32 @@ ico_read_entries(IcoHeader* header, FILE* file) {
         fread(entry, sizeof(IcoEntry), 1, file);
     }
     
-    for(u16 i = 0; i < header->imageCount; i++) {
-        IcoEntry entry = entries[i];
-        void* imageData = malloc(entry.size);
-        
-        fseek(file, entry.offset, SEEK_SET);
-        fread(imageData, entry.size, 1, file);
-    }
-    
     return entries;
+}
+
+static inline IcoEntry*
+ico_read(IcoHeader* header, FILE* file) {
+    ico_read_header(header, file);
+    return ico_read_entries(header, file);
+}
+
+static inline void
+ico_write_header(IcoHeader* header, FILE* file) {
+    fwrite(header, sizeof(IcoHeader), 1, file);
+}
+
+static inline void
+ico_write_entries(IcoHeader* header, IcoEntry* entries, FILE* file) {
+    for(u16 i = 0; i < header->imageCount; i++) {
+        IcoEntry* entry = &entries[i];
+        fwrite(entry, sizeof(IcoEntry), 1, file);
+    }
+}
+
+static inline void
+ico_write(IcoHeader* header, IcoEntry* entries, FILE* file) {
+    ico_write_header(header, file);
+    ico_write_entries(header, entries, file);
 }
 
 #endif // ICO_H
