@@ -30,16 +30,32 @@ typedef struct CursorEntry {
 } CursorEntry;
 
 static inline void
-cursor_read_header(FILE* file, CursorHeader* header) {
+cur_read_header(CursorHeader* header, FILE* file) {
+    if(header == NULL) {
+        header = malloc(sizeof(CursorHeader));
+    }
+    
     fread(header, sizeof(CursorHeader), 1, file);
 }
-static inline void
-cursor_read_entries(FILE* file, CursorHeader* header, CursorEntry* entries) {
-    entries = malloc(sizeof(CursorEntry) * header->imageCount);
+
+static inline CursorEntry*
+cur_read_entries(CursorHeader* header, FILE* file) {
+    CursorEntry* entries = malloc(sizeof(CursorEntry) * header->imageCount);
     
     for(u16 i = 0; i < header->imageCount; i++) {
-        fread(&entries[i], sizeof(CursorEntry), 1, file);
+        CursorEntry* entry = &entries[i];
+        fread(entry, sizeof(CursorEntry), 1, file);
     }
+    
+    for(u16 i = 0; i < header->imageCount; i++) {
+        CursorEntry entry = entries[i];
+        void* imageData = malloc(entry.size);
+        
+        fseek(file, entry.offset, SEEK_SET);
+        fread(imageData, entry.size, 1, file);
+    }
+    
+    return entries;
 }
 
 #endif // CURSOR_H
