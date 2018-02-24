@@ -130,6 +130,31 @@ icon_write(FILE* file, Icon* icon) {
     }
 }
 
+// Adds an image to an icon
+static inline void
+icon_add_image(Icon* icon, IconImage* image) {
+    icon->ImageCount++;
+    realloc(icon->Images, sizeof(IconImage) * icon->ImageCount);
+    icon->Images[icon->ImageCount - 1];
+}
+
+// Removes an image from an icon 
+static inline void
+icon_remove_image(Icon* icon, IconImage* image) {
+    u08 offset = 0;
+    for(u16 i = 0; i < icon->ImageCount; i++) {
+        if(image == &icon->Images[i]) {
+            offset = 1;
+        }
+        else if(offset) {
+            icon->Images[i - offset] = icon->Images[i];
+        }
+    }
+    
+    icon->ImageCount--;
+    realloc(icon->Images, icon->ImageCount);
+}
+
 static inline void
 ico_read_header(IconHeader* header, FILE* file) {
     if(header == NULL) {
