@@ -12,30 +12,41 @@ int main(int argc, char** argv)
 {
     FILE* file = fopen("file.cur", "r+");
     
-    IcoHeader header;
+    IconHeader header;
     ico_read_header(&header, file);
     
     printf("Cursor header:\n");
-    printf("  reserved:   0x%x\n", (u16) (header.reserved[0] + header.reserved[1]));
-    printf("  imageType:  0x%x\n", header.imageType);
-    printf("  imageCount: 0x%x\n", header.imageCount);
+    printf("  reserved:   0x%x\n", (u16) (header.Reserved[0] + header.Reserved[1]));
+    printf("  imageType:  0x%x\n", header.Type);
+    printf("  imageCount: 0x%x\n", header.ImageCount);
     
-    IcoEntry* entries = ico_read_entries(&header, file);
-    for(u16 i = 0; i < header.imageCount; i++) {
-        IcoEntry entry = entries[i];
+    IconEntry* entries = ico_read_entries(&header, file);
+    for(u16 i = 0; i < header.ImageCount; i++) {
+        IconEntry entry = entries[i];
         printf("Cursor entry:\n");
-        printf("  width:        0x%x\n", entry.width);
-        printf("  height:       0x%x\n", entry.height);
-        printf("  paletteSize:  0x%x\n", entry.paletteSize);
-        printf("  reserved:     0x%x\n", entry.reserved);
-        printf("  colorplanes:  0x%x\n", entry.colorPlanes);
-        printf("  bitsPerPixel: 0x%x\n", entry.bitsPerPixel);
-        printf("  size:         0x%x\n", entry.size);
-        printf("  offset:       0x%x\n", entry.offset);
+        printf("  width:        0x%x\n", entry.Width);
+        printf("  height:       0x%x\n", entry.Height);
+        printf("  paletteSize:  0x%x\n", entry.PaletteSize);
+        printf("  reserved:     0x%x\n", entry.Reserved);
+        printf("  colorplanes:  0x%x\n", entry.ColorPlanes);
+        printf("  bitsPerPixel: 0x%x\n", entry.BitsPerPixel);
+        printf("  size:         0x%x\n", entry.Size);
+        printf("  offset:       0x%x\n", entry.Offset);
     }
     
     fclose(file);
     free(entries);
+    
+    FILE* in  = fopen("file.ico", "rb");
+    FILE* out = fopen("newi.ico", "wb");
+    
+    Icon icon;
+    icon_read (in,  &icon);
+    icon_write(out, &icon);
+    
+    icon_free(&icon);
+    fclose(in);
+    fclose(out);
     
     exit(0);
 }
