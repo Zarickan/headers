@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
-#include "../types.h"
+#include "types.h"
 
 #ifndef CURSOR_H
 #define CURSOR_H
