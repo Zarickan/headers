@@ -32,7 +32,6 @@ typedef struct RgbTriple {
     u08 Blue;
     u08 Green;
     u08 Red;
-    u08 _Unused;
 } RgbTriple;
 
 typedef struct RgbQuad {
@@ -197,9 +196,9 @@ typedef struct Bitmap {
     u08*              Data;
 } Bitmap;
 
-#define bitmap_version(header) bitmap_get_version((BitmapCoreHeader*) header)
-#define bitmap_colorcount(header) bitmap_get_colorcount((BitmapCoreHeader*) header)
-#define bitmap_read_info(header, file) bitmap_read_info_from_file((BitmapCoreHeader*) header, file)
+#define bitmap_version(info) bitmap_get_version((BitmapCoreHeader*) info)
+#define bitmap_colorcount(info) bitmap_get_colorcount((BitmapCoreHeader*) info)
+#define bitmap_read_info(header, info, file) bitmap_read_info_from_file(header, (BitmapCoreHeader*) info, file)
 
 static inline u08
 bitmap_get_version(BitmapCoreHeader* infoHeader) {
@@ -233,14 +232,15 @@ bitmap_get_colorcount(BitmapCoreHeader* header) {
 }
 
 static inline void
-bitmap_read_info_from_file(BitmapCoreHeader* info, FILE* file) {
+bitmap_read_info_from_file(BitmapHeader* header, BitmapCoreHeader* info, FILE* file) {
+    fread(header, sizeof(BitmapHeader), 1, file);
     fread(info, sizeof(BitmapCoreHeader), 1, file);
     
     // NOTE: Read remaining fields depending on the bitmap version
     u32 v0InfoSize = sizeof(BitmapCoreHeader);
     if (info->Size > v0InfoSize) {
         u08* infoPtr = (u08*) info;
-        u32  infoSize = info->Size - sizeof(info->Size);
+        u32  infoSize = info->Size - sizeof(BitmapCoreHeader);
         assert(infoSize > 0);
         
         fread(infoPtr + v0InfoSize, sizeof(u08), infoSize, file);
@@ -278,11 +278,26 @@ write_bitmap_to_file(Bitmap* bitmap, FILE* file) {
 }
 
 static inline void
+display_palette(BitmapInfoHeader* header, u08* data) {
+    //assert(header->UsedColors != 0x00);
+    if(header->UsedColors == 0x00) return;
+    
+    // TODO: Handle BitmapCoreHeader using RgbTriple for colors instead of RgbQuad
+    RgbQuad* palette = malloc(sizeof(RgbQuad) * header->UsedColors);
+    
+    for (u16 i = 0; i < header->UsedColors; i++) {
+        RgbQuad rgb = palette[i];
+        u32 color = *((u32*) palette + i);
+        printf("%2x : %8x [%2x %2x %2x]\n",i , color, rgb.Red, rgb.Green, rgb.Blue);
+    }
+}
+
+static inline void
 display_bitmapinfo(BitmapInfoHeader* header) {
     printf("  BitmapInfoHeader:\n");
     printf("  Version:        %i\n", bitmap_get_version((BitmapCoreHeader*) header));
     printf("  Color count:    %llu\n", bitmap_get_colorcount((BitmapCoreHeader*) header));
-    printf("  Uses palette:   %s\n", header->BitCount < 16 ? "true" : "false");
+    printf("  Uses palette:   %s\n", header->UsedColors > 0 ? "true" : "false");
     printf("    Size:            0x%x\n", header->Size);
     printf("    Width:           0x%x\n", header->Width);
     printf("    Height:          0x%x\n", header->Height);
@@ -301,7 +316,7 @@ log_bitmapinfo(BitmapInfoHeader* header, FILE* file) {
     fprintf(file, "  BitmapInfoHeader:\n");
     fprintf(file, "  Version:        %i\n", bitmap_get_version((BitmapCoreHeader*) header));
     fprintf(file, "  Color count:    %llu\n", bitmap_get_colorcount((BitmapCoreHeader*) header));
-    fprintf(file, "  Uses palette:   %s\n", header->BitCount < 16 ? "true" : "false");
+    fprintf(file, "  Uses palette:   %s\n", header->UsedColors > 0 ? "true" : "false");
     fprintf(file, "    Size:            0x%x\n", header->Size);
     fprintf(file, "    Width:           0x%x\n", header->Width);
     fprintf(file, "    Height:          0x%x\n", header->Height);

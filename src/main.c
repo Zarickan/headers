@@ -16,47 +16,57 @@
 int main(int argc, char** argv)
 {
     char images[IMAGES][40] = {
-        { "rgb32bfdef.bmp" },
-        { "rgb32bf.bmp" },
-        { "rgb32.bmp" },
-        { "rgb24pal.bmp"}, 
-        { "rgb24.bmp" },
-        { "rgb16bfdef.bmp"}, 
-        { "rgb16.bmp" },
-        { "rgb16-565pal.bmp"}, 
-        { "rgb16-565.bmp" },
-        { "pal8w126.bmp" },
-        { "pal8w125.bmp" },
-        { "pal8w124.bmp" },
-        { "pal8v5.bmp" },
-        { "pal8v4.bmp" },
-        { "pal8topdown.bmp" },
-        { "pal8rle.bmp" },
-        { "pal8os2.bmp" },
-        { "pal8nonsquare.bmp"}, 
-        { "pal8gs.bmp" },
-        { "pal8.bmp" },
-        { "pal8-0.bmp" },
-        { "pal4rle.bmp" },
-        { "pal4gs.bmp" },
-        { "pal4.bmp" },
-        { "pal1wb.bmp" },
-        { "pal1bg.bmp" },
-        { "pal1.bmp" }
-    }; 
+        { "output/bmpsuite/g/rgb32bfdef.bmp" },
+        { "output/bmpsuite/g/rgb32bf.bmp" },
+        { "output/bmpsuite/g/rgb32.bmp" },
+        { "output/bmpsuite/g/rgb24pal.bmp"}, 
+        { "output/bmpsuite/g/rgb24.bmp" },
+        { "output/bmpsuite/g/rgb16bfdef.bmp"}, 
+        { "output/bmpsuite/g/rgb16.bmp" },
+        { "output/bmpsuite/g/rgb16-565pal.bmp"}, 
+        { "output/bmpsuite/g/rgb16-565.bmp" },
+        { "output/bmpsuite/g/pal8w126.bmp" },
+        { "output/bmpsuite/g/pal8w125.bmp" },
+        { "output/bmpsuite/g/pal8w124.bmp" },
+        { "output/bmpsuite/g/pal8v5.bmp" },
+        { "output/bmpsuite/g/pal8v4.bmp" },
+        { "output/bmpsuite/g/pal8topdown.bmp" },
+        { "output/bmpsuite/g/pal8rle.bmp" },
+        { "output/bmpsuite/g/pal8os2.bmp" },
+        { "output/bmpsuite/g/pal8nonsquare.bmp"}, 
+        { "output/bmpsuite/g/pal8gs.bmp" },
+        { "output/bmpsuite/g/pal8.bmp" },
+        { "output/bmpsuite/g/pal8-0.bmp" },
+        { "output/bmpsuite/g/pal4rle.bmp" },
+        { "output/bmpsuite/g/pal4gs.bmp" },
+        { "output/bmpsuite/g/pal4.bmp" },
+        { "output/bmpsuite/g/pal1wb.bmp" },
+        { "output/bmpsuite/g/pal1bg.bmp" },
+        { "output/bmpsuite/g/pal1.bmp" }
+    };
     
     for (u08 i = 0; i < IMAGES; i++) {
-        FILE* file = fopen("pal1.bmp", "rb");
+        FILE* file = fopen(images[i], "rb");
         if (file == NULL || ferror(file)) {
             printf("Error reading file %s\n", images[i]);
             continue;
         }
         
-        BitmapInfoHeader header;
-        bitmap_read_info(&header, file);
+        BitmapHeader header;
+        BitmapInfoHeader info;
+        bitmap_read_info(&header, &info, file);
+        
+        u08* data = malloc(info.SizeImage);
+        fread(data, sizeof(u08), info.SizeImage, file);
         
         printf("Metadata for %s\n", images[i]);
-        display_bitmapinfo(&header);
+        display_bitmapinfo(&info);
+        
+        if (info.UsedColors > 0) {
+            printf("  :: Colors in palette:\n");
+            display_palette(&info, data);
+        }
+        
         printf("\n---------------------------\n");
     }
     
