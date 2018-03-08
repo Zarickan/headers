@@ -1,52 +1,64 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "types.h"
 #include "stack.h"
 #include "list.h"
 #include "linkedlist.h"
 #include "heaps.h"
 #include "memory.h"
-#include "formats/cursor.h"
-#include "formats/ico.h"
+#include "cur.h"
+#include "ico.h"
+#include "bitmap.h"
+
+#define IMAGES 27
 
 int main(int argc, char** argv)
 {
-    FILE* file = fopen("file.cur", "r+");
+    char images[IMAGES][40] = {
+        { "rgb32bfdef.bmp" },
+        { "rgb32bf.bmp" },
+        { "rgb32.bmp" },
+        { "rgb24pal.bmp"}, 
+        { "rgb24.bmp" },
+        { "rgb16bfdef.bmp"}, 
+        { "rgb16.bmp" },
+        { "rgb16-565pal.bmp"}, 
+        { "rgb16-565.bmp" },
+        { "pal8w126.bmp" },
+        { "pal8w125.bmp" },
+        { "pal8w124.bmp" },
+        { "pal8v5.bmp" },
+        { "pal8v4.bmp" },
+        { "pal8topdown.bmp" },
+        { "pal8rle.bmp" },
+        { "pal8os2.bmp" },
+        { "pal8nonsquare.bmp"}, 
+        { "pal8gs.bmp" },
+        { "pal8.bmp" },
+        { "pal8-0.bmp" },
+        { "pal4rle.bmp" },
+        { "pal4gs.bmp" },
+        { "pal4.bmp" },
+        { "pal1wb.bmp" },
+        { "pal1bg.bmp" },
+        { "pal1.bmp" }
+    }; 
     
-    IconHeader header;
-    ico_read_header(&header, file);
-    
-    printf("Cursor header:\n");
-    printf("  reserved:   0x%x\n", (u16) (header.Reserved[0] + header.Reserved[1]));
-    printf("  imageType:  0x%x\n", header.Type);
-    printf("  imageCount: 0x%x\n", header.ImageCount);
-    
-    IconEntry* entries = ico_read_entries(&header, file);
-    for(u16 i = 0; i < header.ImageCount; i++) {
-        IconEntry entry = entries[i];
-        printf("Cursor entry:\n");
-        printf("  width:        0x%x\n", entry.Width);
-        printf("  height:       0x%x\n", entry.Height);
-        printf("  paletteSize:  0x%x\n", entry.PaletteSize);
-        printf("  reserved:     0x%x\n", entry.Reserved);
-        printf("  colorplanes:  0x%x\n", entry.ColorPlanes);
-        printf("  bitsPerPixel: 0x%x\n", entry.BitsPerPixel);
-        printf("  size:         0x%x\n", entry.Size);
-        printf("  offset:       0x%x\n", entry.Offset);
+    for (u08 i = 0; i < IMAGES; i++) {
+        FILE* file = fopen("pal1.bmp", "rb");
+        if (file == NULL || ferror(file)) {
+            printf("Error reading file %s\n", images[i]);
+            continue;
+        }
+        
+        BitmapInfoHeader header;
+        bitmap_read_info(&header, file);
+        
+        printf("Metadata for %s\n", images[i]);
+        display_bitmapinfo(&header);
+        printf("\n---------------------------\n");
     }
-    
-    fclose(file);
-    free(entries);
-    
-    FILE* in  = fopen("file.ico", "rb");
-    FILE* out = fopen("newi.ico", "wb");
-    
-    Icon icon;
-    icon_read (in,  &icon);
-    icon_write(out, &icon);
-    
-    icon_free(&icon);
-    fclose(in);
-    fclose(out);
     
     exit(0);
 }
