@@ -303,7 +303,7 @@ bitmap_create_v5(Bitmap* bitmap, s32 height, s32 width) {
     info->BlueMask  = 0x000000FF;
     info->AlphaMask = 0xFF000000;
     info->ColorSpaceType = 0x206E6957;
-    //info->Endpoints = { 0x00, 0x00, 0x00 };
+    //info->Endpoints = { 0x00, 0x00, 0x00 }; // NOTE: Ignored for the use ColorSpaceType (see specification)
     info->GammaRed   = 0;
     info->GammaGreen = 0;
     info->GammaBlue  = 0;
@@ -407,5 +407,3 @@ log_bitmapinfo(BitmapInfoHeader* header, FILE* file) {
 }
 
 #endif // BITMAP_H
-
-

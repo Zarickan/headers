@@ -16,9 +16,17 @@
 int main(int argc, char** argv)
 {
     Bitmap image;
-    bitmap_create_v5(&image, 64, 64);
+    bitmap_create_v5(&image, 256, 256);
     
-    memset(image.Data.Bytes, 0xFF, image.Info->SizeImage);
+    for(u64 y = 0; y < image.Info->Height; y++) {
+        for(u64 x = 0; x < image.Info->Width; x++) {
+            u64 index = y * image.Info->Height + x;
+            image.Data.Rgb[index].Red = x;
+            image.Data.Rgb[index].Green = y;
+            image.Data.Rgb[index].Blue = 0;
+            image.Data.Rgb[index].Alpha = x;
+        }
+    }
     
     FILE* outputImage = fopen("test.bmp", "wb");
     write_bitmap_to_file(&image, outputImage);
