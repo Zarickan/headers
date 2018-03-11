@@ -193,7 +193,11 @@ typedef struct BitmapInfoV5Header {
 typedef struct Bitmap {
     BitmapHeader      Header;
     BitmapInfoHeader* Info;
-    u08*              Data;
+    
+    union Data {
+        u08* Bytes;
+        RgbQuad* Rgb;
+    } Data;
 } Bitmap;
 
 #define bitmap_version(info) bitmap_get_version((BitmapCoreHeader*) info)
@@ -258,13 +262,13 @@ create_bitmap(Bitmap* bitmap, BitmapHeader* header, BitmapInfoHeader* bitmapInfo
     
     bitmap->Header = *header;
     bitmap->Info = bitmapInfo;
-    bitmap->Data = data;
+    bitmap->Data.Bytes = data;
 }
 
 static inline void
 bitmap_free(Bitmap* bitmap) {
     free(bitmap->Info);
-    free(bitmap->Data);
+    free(bitmap->Data.Bytes);
     free(bitmap);
 }
 
@@ -274,7 +278,7 @@ write_bitmap_to_file(Bitmap* bitmap, FILE* file) {
     
     fwrite(&bitmap->Header, sizeof(BitmapHeader), 1, file);
     fwrite(bitmap->Info, bitmap->Info->Size, 1, file);
-    fwrite(bitmap->Data, sizeof(u08), bitmap->Info->SizeImage, file);
+    fwrite(bitmap->Data.Bytes, sizeof(u08), bitmap->Info->SizeImage, file);
 }
 
 static inline void
