@@ -63,16 +63,16 @@ typedef struct BitmapHeader {
 
 typedef struct BitmapCoreHeader {
     u32 Size;
-    u32 Width;
-    u32 Height;
+    s32 Width;
+    s32 Height;
     u16 Planes;
     u16 BitCount;
 } BitmapCoreHeader;
 
 typedef struct BitmapInfoHeader {
     u32 Size;
-    u32 Width;
-    u32 Height;
+    s32 Width;
+    s32 Height;
     u16 Planes;
     u16 BitCount;
     u32 Compression;
@@ -85,8 +85,8 @@ typedef struct BitmapInfoHeader {
 
 typedef struct BitmapInfoV2Header {
     u32 Size;
-    u32 Width;
-    u32 Height;
+    s32 Width;
+    s32 Height;
     u16 Planes;
     u16 BitCount;
     u32 Compression;
@@ -104,8 +104,8 @@ typedef struct BitmapInfoV2Header {
 
 typedef struct BitmapInfoV3Header {
     u32 Size;
-    u32 Width;
-    u32 Height;
+    s32 Width;
+    s32 Height;
     u16 Planes;
     u16 BitCount;
     u32 Compression;
@@ -126,8 +126,8 @@ typedef struct BitmapInfoV3Header {
 
 typedef struct BitmapInfoV4Header {
     u32 Size;
-    u32 Width;
-    u32 Height;
+    s32 Width;
+    s32 Height;
     u16 Planes;
     u16 BitCount;
     u32 Compression;
@@ -155,8 +155,8 @@ typedef struct BitmapInfoV4Header {
 
 typedef struct BitmapInfoV5Header {
     u32 Size;
-    u32 Width;
-    u32 Height;
+    s32 Width;
+    s32 Height;
     u16 Planes;
     u16 BitCount;
     u32 Compression;
