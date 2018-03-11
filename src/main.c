@@ -15,6 +15,17 @@
 
 int main(int argc, char** argv)
 {
+    Bitmap image;
+    bitmap_create_v5(&image, 64, 64);
+    
+    memset(image.Data.Bytes, 0xFF, image.Info->SizeImage);
+    
+    FILE* outputImage = fopen("test.bmp", "wb");
+    write_bitmap_to_file(&image, outputImage);
+    fclose(outputImage);
+    
+    exit(0);
+    
     char images[IMAGES][40] = {
         { "output/bmpsuite/g/rgb32bfdef.bmp" },
         { "output/bmpsuite/g/rgb32bf.bmp" },
