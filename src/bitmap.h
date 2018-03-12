@@ -197,8 +197,9 @@ typedef struct Bitmap {
     BitmapInfoHeader* Info;
     
     union Data {
-        u08* Bytes;
-        RgbQuad* Rgb;
+        u08*       Bytes;
+        RgbTriple* Rgb;
+        RgbQuad*   Rgba;
     } Data;
 } Bitmap;
 
@@ -270,7 +271,7 @@ bitmap_create_core(Bitmap* bitmap, s32 height, s32 width) {
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
     
-    bitmap->Data.Rgb = malloc(info->SizeImage);
+    bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void
@@ -296,7 +297,7 @@ bitmap_create_v1(Bitmap* bitmap, s32 height, s32 width) {
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
     
-    bitmap->Data.Rgb = malloc(info->SizeImage);
+    bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void
@@ -325,7 +326,7 @@ bitmap_create_v2(Bitmap* bitmap, s32 height, s32 width) {
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
     
-    bitmap->Data.Rgb = malloc(info->SizeImage);
+    bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void
@@ -355,7 +356,7 @@ bitmap_create_v3(Bitmap* bitmap, s32 height, s32 width) {
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
     
-    bitmap->Data.Rgb = malloc(info->SizeImage);
+    bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void
@@ -390,7 +391,7 @@ bitmap_create_v4(Bitmap* bitmap, s32 height, s32 width) {
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
     
-    bitmap->Data.Rgb = malloc(info->SizeImage);
+    bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void
@@ -429,7 +430,7 @@ bitmap_create_v5(Bitmap* bitmap, s32 height, s32 width) {
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
     
-    bitmap->Data.Rgb = malloc(info->SizeImage);
+    bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void

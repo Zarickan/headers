@@ -21,10 +21,10 @@ int main(int argc, char** argv)
     for(u64 y = 0; y < image.Info->Height; y++) {
         for(u64 x = 0; x < image.Info->Width; x++) {
             u64 index = y * image.Info->Height + x;
-            image.Data.Rgb[index].Red = x;
-            image.Data.Rgb[index].Green = y;
-            image.Data.Rgb[index].Blue = 0;
-            image.Data.Rgb[index].Alpha = x;
+            image.Data.Rgba[index].Red = x;
+            image.Data.Rgba[index].Green = y;
+            image.Data.Rgba[index].Blue = 0;
+            image.Data.Rgba[index].Alpha = x;
         }
     }
     
