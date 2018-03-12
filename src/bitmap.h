@@ -254,6 +254,81 @@ bitmap_read_info_from_file(BitmapHeader* header, BitmapCoreHeader* info, FILE* f
 }
 
 static inline void
+bitmap_create_core(Bitmap* bitmap, s32 height, s32 width) {
+    BitmapCoreHeader* info = malloc(sizeof(BitmapCoreHeader));
+    info->Size = sizeof(BitmapCoreHeader);
+    info->Width = width;
+    info->Height = height;
+    info->Planes = 0;
+    info->BitCount = 24;
+    
+    bitmap->Info = (BitmapInfoHeader*) info;
+    
+    bitmap->Header.Id = 0x4D42;
+    bitmap->Header.Reserved[0] = 0;
+    bitmap->Header.Reserved[1] = 0;
+    bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
+    bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
+    
+    bitmap->Data.Rgb = malloc(info->SizeImage);
+}
+
+static inline void
+bitmap_create_v1(Bitmap* bitmap, s32 height, s32 width) {
+    BitmapInfoHeader* info = malloc(sizeof(BitmapInfoHeader));
+    info->Size = sizeof(BitmapInfoHeader);
+    info->Width = width;
+    info->Height = height;
+    info->Planes = 0;
+    info->BitCount = 32;
+    info->Compression = BI_RGB;
+    info->SizeImage = sizeof(RgbQuad) * height * width;
+    info->XPelsPerMeter = DPI72;
+    info->YPelsPerMeter = DPI72;
+    info->UsedColors = 0x00;
+    info->ImportantColors = 0x00;
+    
+    bitmap->Info = (BitmapInfoHeader*) info;
+    
+    bitmap->Header.Id = 0x4D42;
+    bitmap->Header.Reserved[0] = 0;
+    bitmap->Header.Reserved[1] = 0;
+    bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
+    bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
+    
+    bitmap->Data.Rgb = malloc(info->SizeImage);
+}
+
+static inline void
+bitmap_create_v2(Bitmap* bitmap, s32 height, s32 width) {
+    BitmapInfoV2Header* info = malloc(sizeof(BitmapInfoV2Header));
+    info->Size = sizeof(BitmapInfoV2Header);
+    info->Width = width;
+    info->Height = height;
+    info->Planes = 0;
+    info->BitCount = 32;
+    info->Compression = BI_BITFIELDS;
+    info->SizeImage = sizeof(RgbQuad) * height * width;
+    info->XPelsPerMeter = DPI72;
+    info->YPelsPerMeter = DPI72;
+    info->UsedColors = 0x00;
+    info->ImportantColors = 0x00;
+    info->RedMask   = 0x00FF0000;
+    info->GreenMask = 0x0000FF00;
+    info->BlueMask  = 0x000000FF;
+    
+    bitmap->Info = (BitmapInfoHeader*) info;
+    
+    bitmap->Header.Id = 0x4D42;
+    bitmap->Header.Reserved[0] = 0;
+    bitmap->Header.Reserved[1] = 0;
+    bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
+    bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
+    
+    bitmap->Data.Rgb = malloc(info->SizeImage);
+}
+
+static inline void
 bitmap_create_v3(Bitmap* bitmap, s32 height, s32 width) {
     BitmapInfoV3Header* info = malloc(sizeof(BitmapInfoV3Header));
     info->Size = sizeof(BitmapInfoV3Header);
@@ -283,6 +358,40 @@ bitmap_create_v3(Bitmap* bitmap, s32 height, s32 width) {
     bitmap->Data.Rgb = malloc(info->SizeImage);
 }
 
+static inline void
+bitmap_create_v4(Bitmap* bitmap, s32 height, s32 width) {
+    BitmapInfoV4Header* info = malloc(sizeof(BitmapInfoV4Header));
+    info->Size = sizeof(BitmapInfoV4Header);
+    info->Width = width;
+    info->Height = height;
+    info->Planes = 0;
+    info->BitCount = 32;
+    info->Compression = BI_BITFIELDS;
+    info->SizeImage = sizeof(RgbQuad) * height * width;
+    info->XPelsPerMeter = DPI72;
+    info->YPelsPerMeter = DPI72;
+    info->UsedColors = 0x00;
+    info->ImportantColors = 0x00;
+    info->RedMask   = 0x00FF0000;
+    info->GreenMask = 0x0000FF00;
+    info->BlueMask  = 0x000000FF;
+    info->AlphaMask = 0xFF000000;
+    info->ColorSpaceType = 0x206E6957;
+    //info->Endpoints = { 0x00, 0x00, 0x00 }; // NOTE: Ignored for the use ColorSpaceType (see specification)
+    info->GammaRed   = 0;
+    info->GammaGreen = 0;
+    info->GammaBlue  = 0;
+    
+    bitmap->Info = (BitmapInfoHeader*) info;
+    
+    bitmap->Header.Id = 0x4D42;
+    bitmap->Header.Reserved[0] = 0;
+    bitmap->Header.Reserved[1] = 0;
+    bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
+    bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
+    
+    bitmap->Data.Rgb = malloc(info->SizeImage);
+}
 
 static inline void
 bitmap_create_v5(Bitmap* bitmap, s32 height, s32 width) {
