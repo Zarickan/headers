@@ -65,8 +65,8 @@ typedef struct BitmapHeader {
 
 typedef struct BitmapCoreHeader {
     u32 Size;
-    s32 Width;
-    s32 Height;
+    s16 Width;
+    s16 Height;
     u16 Planes;
     u16 BitCount;
 } BitmapCoreHeader;
@@ -263,15 +263,17 @@ bitmap_create_core(Bitmap* bitmap, s32 height, s32 width) {
     info->Planes = 0;
     info->BitCount = 24;
     
+    u32 size = width * height * sizeof(RgbTriple);
+    
     bitmap->Info = (BitmapInfoHeader*) info;
     
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
     bitmap->Header.Reserved[1] = 0;
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
-    bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
+    bitmap->Header.Size = bitmap->Header.Offset + size;
     
-    bitmap->Data.Rgba = malloc(info->SizeImage);
+    bitmap->Data.Rgba = malloc(size);
 }
 
 static inline void
