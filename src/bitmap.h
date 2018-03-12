@@ -14,6 +14,7 @@
 #define BITMAP_V3       0x03
 #define BITMAP_V4       0x04
 #define BITMAP_V5       0x05
+#define BITMAP_VCORE    0x06
 
 #define BI_RGB            0x00
 #define BI_RLE8           0x01
@@ -273,7 +274,7 @@ bitmap_create_core(Bitmap* bitmap, s32 height, s32 width) {
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + size;
     
-    bitmap->Data.Rgba = malloc(size);
+    bitmap->Data.Rgb = malloc(size);
 }
 
 static inline void
@@ -459,9 +460,16 @@ bitmap_free(Bitmap* bitmap) {
 static inline void
 write_bitmap_to_file(Bitmap* bitmap, FILE* file) {
     assert(bitmap->Info->Size != 0);
-    
     fwrite(&bitmap->Header, sizeof(BitmapHeader), 1, file);
     fwrite(bitmap->Info, bitmap->Info->Size, 1, file);
+    
+    if (bitmap_version(bitmap->Info) == BITMAP_VCORE) {
+        u32 size = bitmap->Info->Width * bitmap->Info->Height * (bitmap->Info->BitCount / 8);
+        
+        fwrite(bitmap->Data.Bytes, sizeof(u08), size, file);
+        return;
+    }
+    
     fwrite(bitmap->Data.Bytes, sizeof(u08), bitmap->Info->SizeImage, file);
 }
 
