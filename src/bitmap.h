@@ -261,7 +261,7 @@ bitmap_create_core(Bitmap* bitmap, s32 height, s32 width) {
     info->Size = sizeof(BitmapCoreHeader);
     info->Width = width;
     info->Height = height;
-    info->Planes = 0;
+    info->Planes = 1;
     info->BitCount = 24;
     
     u32 size = width * height * sizeof(RgbTriple);
@@ -283,7 +283,7 @@ bitmap_create_v1(Bitmap* bitmap, s32 height, s32 width) {
     info->Size = sizeof(BitmapInfoHeader);
     info->Width = width;
     info->Height = height;
-    info->Planes = 0;
+    info->Planes = 1;
     info->BitCount = 32;
     info->Compression = BI_RGB;
     info->SizeImage = sizeof(RgbQuad) * height * width;
@@ -309,7 +309,7 @@ bitmap_create_v2(Bitmap* bitmap, s32 height, s32 width) {
     info->Size = sizeof(BitmapInfoV2Header);
     info->Width = width;
     info->Height = height;
-    info->Planes = 0;
+    info->Planes = 1;
     info->BitCount = 32;
     info->Compression = BI_BITFIELDS;
     info->SizeImage = sizeof(RgbQuad) * height * width;
@@ -338,7 +338,7 @@ bitmap_create_v3(Bitmap* bitmap, s32 height, s32 width) {
     info->Size = sizeof(BitmapInfoV3Header);
     info->Width = width;
     info->Height = height;
-    info->Planes = 0;
+    info->Planes = 1;
     info->BitCount = 32;
     info->Compression = BI_BITFIELDS;
     info->SizeImage = sizeof(RgbQuad) * height * width;
@@ -368,7 +368,7 @@ bitmap_create_v4(Bitmap* bitmap, s32 height, s32 width) {
     info->Size = sizeof(BitmapInfoV4Header);
     info->Width = width;
     info->Height = height;
-    info->Planes = 0;
+    info->Planes = 1;
     info->BitCount = 32;
     info->Compression = BI_BITFIELDS;
     info->SizeImage = sizeof(RgbQuad) * height * width;
@@ -403,7 +403,7 @@ bitmap_create_v5(Bitmap* bitmap, s32 height, s32 width) {
     info->Size = sizeof(BitmapInfoV5Header);
     info->Width = width;
     info->Height = height;
-    info->Planes = 0;
+    info->Planes = 1;
     info->BitCount = 32;
     info->Compression = BI_BITFIELDS;
     info->SizeImage = sizeof(RgbQuad) * height * width;
