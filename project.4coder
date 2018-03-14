@@ -1,6 +1,7 @@
 extensions = ".c.cpp.h.m.bat.sh.4coder";
 open_recursively = true;
 
+fkey_command_win[4] = {"build.bat & \"output\\test.exe\"", "*run*", true , true };
 fkey_command_win[5] = {"output\\test.exe", "*run*", true , true };
 fkey_command_win[6] = {"build.bat", "*compilation*", true , true };
 
