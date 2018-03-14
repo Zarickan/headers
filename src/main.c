@@ -7,16 +7,6 @@
 #include "memory.h"
 #include "bitmap.h"
 
-s16
-max(s16 a, s16 b) {
-    return a > b ? a : b;
-}
-
-s16
-min(s16 a, s16 b) {
-    return a < b ? a : b;
-}
-
 void hsv_to_rgb(f32 h, f32 s, f32 v, u08* r, u08* g, u08* b) {
     f32 C = s * v;
     f32 X = 1;
