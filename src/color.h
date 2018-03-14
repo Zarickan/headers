@@ -65,4 +65,111 @@ color_4x_sub(Color_4x left, Color_4x right) {
     return result;
 }
 
+typedef union ColorF {
+    __m128 P;
+    struct {
+        union {
+            f32 R;
+            f32 H;
+        };
+        union {
+            f32 G;
+            f32 S;
+        };
+        union {
+            f32 B;
+            f32 V;
+        };
+        
+        f32 A;
+    };
+    
+    f32 All[4];
+} ColorF;
+
+static inline ColorF
+colorf_create(f32 r, f32 g, f32 b, f32 a) {
+    ColorF result;
+    result.P = _mm_set_ps(a, b, g, r);
+    
+    return result;
+}
+
+static inline void
+colorf_set(ColorF* color, f32 r, f32 g, f32 b, f32 a) {
+    color->P = _mm_set_ps(a, b, g, r);
+}
+
+static inline ColorF
+colorf_add(ColorF* left, ColorF* right) {
+    ColorF result;
+    result.P = _mm_add_ps(left->P, right->P);
+    
+    return result;
+}
+
+static inline ColorF
+colorf_sub(ColorF* left, ColorF* right) {
+    ColorF result;
+    result.P = _mm_sub_ps(left->P, right->P);
+    
+    return result;
+}
+
+static inline ColorF
+colorf_mul(ColorF* left, ColorF* right) {
+    ColorF result;
+    result.P = _mm_mul_ps(left->P, right->P);
+    
+    return result;
+}
+
+static inline ColorF
+colorf_div(ColorF* left, ColorF* right) {
+    ColorF result;
+    result.P = _mm_div_ps(left->P, right->P);
+    
+    return result;
+}
+
+static inline ColorF
+hsv_to_rgb(ColorF* from) {
+    ColorF result;
+    
+    f64 min, max, delta;
+    
+    min = from->R < from->G ? from->R : from->G;
+    min = min  < from->B ? min  : from->B;
+    
+    max = from->R > from->G ? from->R : from->G;
+    max = max  > from->B ? max  : from->B;
+    
+    result.V = max;
+    delta = max - min;
+    
+    if (max <= 0.0) {
+        colorf_set(&result, NAN, 0.0, result.V, result.A);
+        return result;
+    }
+    
+    result.S = (delta / max);
+    
+    if (from->R >= max) {
+        result.H = (from->G - from->B) / delta;
+    }
+    else {
+        if (from->G >= max)
+            result.H = 2.0 + (from->B - from->R) / delta;
+        else
+            result.H = 4.0 + (from->R - from->G) / delta;
+    }
+    
+    result.H *= 60.0;
+    
+    if (result.H < 0.0)
+        result.H += 360.0;
+    
+    return result;
+}
+
 #endif // COLOR_H
