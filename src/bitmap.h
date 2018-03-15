@@ -30,7 +30,7 @@
 #define BI_CYKRLE4        0x0D 
 
 // DPI Values
-#define DPI(pixels_per_meter) (s32) 39.37008 * 96
+#define DPI(pixels_per_meter) (s32) 39.37008 * pixels_per_meter
 #define DPI72   DPI(72)
 #define DPI96   DPI(96)
 #define DPI150  DPI(150)
