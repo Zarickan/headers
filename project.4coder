@@ -9,6 +9,6 @@ fkey_command_linux[1] = {"./build.sh", "*compilation*", true , true };
 fkey_command_linux[2] = {"output/test", "*run*", true, true };
 fkey_command_linux[3] = {"clang src/main.c -o output/test -std=c99 && ./output/test", "*run*", true , true };
 
-fkey_command_mac[1] = {"clang src/main.c -o output/test -std=c99", "*compilation*", true , true };
+fkey_command_mac[1] = {"clang src/main.c -march=native -o output/test -std=c99", "*compilation*", true , true };
 fkey_command_mac[2] = {"./output/test", "*run*", true , true };
-fkey_command_mac[3] = {"clang src/main.c -o output/test -std=c99 && ./output/test", "*run*", true , true };
+fkey_command_mac[3] = {"clang src/main.c -march=native -o output/test -std=c99 && ./output/test", "*run*", true , true };
