@@ -7,6 +7,7 @@
 #ifndef BITMAP_H
 #define BITMAP_H
 
+// Bitmap versions
 #define BITMAP_VUNKNOWN 0xFF
 #define BITMAP_V0       0x00
 #define BITMAP_V1       0x01
@@ -16,6 +17,7 @@
 #define BITMAP_V5       0x05
 #define BITMAP_VCORE    0x06
 
+// Compression mods, use BI_RGB for raw RGB data with no compression
 #define BI_RGB            0x00
 #define BI_RLE8           0x01
 #define BI_RLE4           0x02
@@ -27,7 +29,14 @@
 #define BI_CYKRLE8        0x0C
 #define BI_CYKRLE4        0x0D 
 
-#define DPI72 2835
+// DPI Values
+#define DPI(pixels_per_meter) (s32) 39.37008 * pixels_per_meter
+#define DPI72   DPI(72)
+#define DPI96   DPI(96)
+#define DPI150  DPI(150)
+#define DPI300  DPI(300)
+#define DPI2540 DPI(2540)
+#define DPI4000 DPI(4000)
 
 #pragma pack(push,1)
 
