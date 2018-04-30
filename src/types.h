@@ -6,7 +6,8 @@
 #ifndef TYPES_H
 #define TYPES_H
 
-#define SSE2
+#define MMX
+#define SSE
 #define AVX
 
 typedef size_t size;
@@ -120,13 +121,28 @@ v2_normalize(v2 vector) {
 #include <x86intrin.h>
 #endif
 
-#ifdef SSE2
+#ifdef MMX
+
+typedef struct f32_2x {
+    union {
+        __m64 P;
+        f32   E[2];
+        u32   U[2];
+    };
+} f32_2x;
+
+#endif // MMX
+
+#ifdef SSE
 
 typedef struct f32_4x {
     union {
         __m128 P;
         f32    E[4];
         u32    U[4];
+#ifdef MMX
+        f32_2x M[2];
+#endif
     };
 } f32_4x;
 
@@ -258,16 +274,21 @@ f32_4x_neq(f32_4x left, f32_4x right) {
     return result;
 }
 
-#endif // SSE2
+#endif // SSE
 
 #ifdef AVX
 
 typedef struct f32_8x {
     union {
         __m256 P;
-        f32_4x F[2];
         f32    E[8];
         u32    U[8];
+#ifdef MMX
+        f32_2x M[4];
+#endif
+#ifdef SSE
+        f32_4x F[2];
+#endif
     };
 } f32_8x;
 
