@@ -9,13 +9,13 @@
 
 // Bitmap versions
 #define BITMAP_VUNKNOWN 0xFF
+#define BITMAP_VCORE    0x00
 #define BITMAP_V0       0x00
 #define BITMAP_V1       0x01
 #define BITMAP_V2       0x02
 #define BITMAP_V3       0x03
 #define BITMAP_V4       0x04
 #define BITMAP_V5       0x05
-#define BITMAP_VCORE    0x06
 
 // Compression mods, use BI_RGB for raw RGB data with no compression
 #define BI_RGB            0x00
@@ -533,6 +533,71 @@ log_bitmapinfo(BitmapInfoHeader* header, FILE* file) {
     fprintf(file, "    YPelsPerMeter:   0x%x\n", header->YPelsPerMeter);
     fprintf(file, "    UsedColors:      0x%x\n", header->UsedColors);
     fprintf(file, "    ImportantColors: 0x%x\n", header->ImportantColors);
+}
+
+u16
+power(u16 base, u16 power) {
+    if (power == 0) return 1;
+    
+    u16 result = base;;
+    for (u16 n = 1; n < power; n++)
+        result *= base;
+    
+    return result;
+}
+
+static inline u08*
+bitmap_load(FILE* file, u32* width, u32* height) {
+    BitmapHeader header;
+    union {
+        BitmapCoreHeader core;
+        BitmapInfoHeader v1;
+        BitmapInfoV2Header v2;
+        BitmapInfoV3Header v3;
+        BitmapInfoV4Header v4;
+        BitmapInfoV5Header v5;
+    } info;
+    bitmap_read_info(&header, &info.core, file);
+    
+    *width = info.core.Width;
+    *height = info.core.Height;
+    
+    u32 rowSize = floor((info.core.BitCount * info.core.Width + 32.0) / 32.0) * 4;
+    u32 rowOffset = (info.core.Width * info.core.BitCount / 8) - rowSize;
+    u32 dataSize = rowSize * info.core.Height;
+    
+    u08* data = malloc(dataSize);
+    u08* result = malloc(info.core.Width * info.core.Height * sizeof(RgbQuad));
+    fread(data, sizeof(u08), dataSize, file);
+    
+    // Bitmap using the colortable
+    if (info.core.BitCount < 16) {
+        u32 colorCount = power(2, info.core.BitCount * info.core.Planes);
+        RgbQuad* colors = (RgbQuad*) data;
+        
+        u16 pixelMask = power(2, bitmapInfo->BitCount) - 1;
+        u08* pixelData = (u08*) ((RgbQuad*) bitmapData + colorCount);
+        
+        u32 n = 0, j = 0;
+        for (u32 i = 0; i < dataSize; i++) {
+            for(s16 j = 8 / info.core.BitCount - 1; j >= 0; j--) {
+                u08 mask = (pixelMask << j * info.core.BitCount);
+                u08 shift = j * info.core.BitCount;
+                u08 pixel = (pixelData[i] & mask) >> shift;
+                RgbQuad color = colors + pixel;
+                
+                // TODO: Do something with the color from the colortable
+                
+                n++;
+            }
+        }
+    }
+    
+    else if (info.core.BitCount < 16) {
+        assert(dataSize == info.v1.SizeImage);
+    }
+    
+    return result;
 }
 
 #endif // BITMAP_H
