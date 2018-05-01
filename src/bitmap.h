@@ -625,6 +625,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     *width = info.v1.Width;
     *height = info.v1.Height;
     
+    // NOTE: Rows are fit to a DWORD (4 byte) boundary (32 is BPP of output, 31 is bpp - 1 bit)
     u32 rowSize = (u32) (floor((info.v1.BitCount * info.v1.Width + 31.0) / 32.0) * 4);
     u32 rowOffset = (u32) (rowSize - ceil(info.v1.Width * info.v1.BitCount / 8.0));
     u32 dataSize = rowSize * info.v1.Height;
@@ -632,7 +633,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     u08* result = malloc(info.v1.Width * info.v1.Height * sizeof(RgbQuad));
     RgbQuad* rgb = (RgbQuad*) result;
     
-    // Bitmap using the colortable
     if (info.v1.BitCount < 16) {
         // TODO: Handle missing colorcount, IE set to 0?
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
@@ -644,12 +644,18 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         u08* pixelData = malloc(dataSize);
         fread(pixelData, sizeof(u08), dataSize, file);
         
+        // NOTE: Number of columns in the image (width in bytes)
         s32 columns = rowSize - rowOffset;
+        
+        // NOTE: Number of "spare" bits at the end of the last byte in each row
         s32 bitsMod8 = info.v1.Width * info.v1.BitCount % 8;
         s32 remainingBits = bitsMod8 == 0 ? 8 : bitsMod8;
+        
+        // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
         for (s32 row = 0; row < info.v1.Height; row++) {
-            
             for (s32 column = 0; column < columns; column++) {
+                // NOTE: Ammount of colors / pixels in each byte (differs for the last byte depending on pixel width)
+                // Extrashift is the extra shift used for the last byte (since data is stored little endian)
                 s32 colorsInByte = (column + 1 == columns ? remainingBits : 8) / info.v1.BitCount;
                 s32 extraShift  = (column + 1 == columns ? 8 / info.v1.BitCount - colorsInByte : 0);
                 
@@ -662,7 +668,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     *rgb = color;
                     rgb++;
                 }
-                
                 pixelData++;
             }
             pixelData += rowOffset;
