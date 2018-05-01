@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
+#include <memory.h>
 #include "types.h"
 
 #ifndef BITMAP_H
@@ -27,10 +28,10 @@
 #define BI_ALPHABITFIELDS 0x06
 #define BI_CMYK           0x0B
 #define BI_CYKRLE8        0x0C
-#define BI_CYKRLE4        0x0D 
+#define BI_CYKRLE4        0x0D
 
 // DPI Values
-#define DPI(pixels_per_meter) (s32) 39.37008 * pixels_per_meter
+#define DPI(pixels_per_meter) ((u32) 39.37008 * (pixels_per_meter))
 #define DPI72   DPI(72)
 #define DPI96   DPI(96)
 #define DPI150  DPI(150)
@@ -107,7 +108,7 @@ typedef struct BitmapInfoV2Header {
     u32 YPelsPerMeter;
     u32 UsedColors;
     u32 ImportantColors;
-    
+
     // V2
     u32 RedMask;
     u32 GreenMask;
@@ -126,12 +127,12 @@ typedef struct BitmapInfoV3Header {
     u32 YPelsPerMeter;
     u32 UsedColors;
     u32 ImportantColors;
-    
+
     // V2
     u32 RedMask;
     u32 GreenMask;
     u32 BlueMask;
-    
+
     // V3
     u32 AlphaMask;
 } BitmapInfoV3Header;
@@ -148,15 +149,15 @@ typedef struct BitmapInfoV4Header {
     u32 YPelsPerMeter;
     u32 UsedColors;
     u32 ImportantColors;
-    
+
     // V2
     u32 RedMask;
     u32 GreenMask;
     u32 BlueMask;
-    
+
     // V3
     u32 AlphaMask;
-    
+
     // V4
     u32       ColorSpaceType;
     CIETriple Endpoints;
@@ -177,22 +178,22 @@ typedef struct BitmapInfoV5Header {
     u32 YPelsPerMeter;
     u32 UsedColors;
     u32 ImportantColors;
-    
+
     // V2
     u32 RedMask;
     u32 GreenMask;
     u32 BlueMask;
-    
+
     // V3
     u32 AlphaMask;
-    
+
     // V4
     u32       ColorSpaceType;
     CIETriple Endpoints;
     u32       GammaRed;
     u32       GammaGreen;
     u32       GammaBlue;
-    
+
     // V5
     u32 Intent;
     u32 ProfileData;
@@ -205,7 +206,7 @@ typedef struct BitmapInfoV5Header {
 typedef struct Bitmap {
     BitmapHeader      Header;
     BitmapInfoHeader* Info;
-    
+
     union Data {
         u08*       Bytes;
         RgbTriple* Rgb;
@@ -213,81 +214,81 @@ typedef struct Bitmap {
     } Data;
 } Bitmap;
 
-#define bitmap_version(info) bitmap_get_version((BitmapCoreHeader*) info)
-#define bitmap_colorcount(info) bitmap_get_colorcount((BitmapCoreHeader*) info)
-#define bitmap_read_info(header, info, file) bitmap_read_info_from_file(header, (BitmapCoreHeader*) info, file)
+#define bitmap_version(info) bitmap_get_version((BitmapCoreHeader*) (info))
+#define bitmap_colorcount(info) bitmap_get_colorcount((BitmapCoreHeader*) (info))
+#define bitmap_read_info(header, info, file) bitmap_read_info_from_file(header, (BitmapCoreHeader*) (info), file)
 
 static inline u08
 bitmap_get_version(BitmapCoreHeader* infoHeader) {
     switch(infoHeader->Size) {
         case sizeof(BitmapCoreHeader):
-        return BITMAP_V0;
-        
+            return BITMAP_V0;
+
         case sizeof(BitmapInfoHeader):
-        return BITMAP_V1;
-        
+            return BITMAP_V1;
+
         case sizeof(BitmapInfoV2Header):
-        return BITMAP_V2;
-        
+            return BITMAP_V2;
+
         case sizeof(BitmapInfoV3Header):
-        return BITMAP_V3;
-        
+            return BITMAP_V3;
+
         case sizeof(BitmapInfoV4Header):
-        return BITMAP_V4;
-        
+            return BITMAP_V4;
+
         case sizeof(BitmapInfoV5Header):
-        return BITMAP_V5;
-        
+            return BITMAP_V5;
+
         default:
-        return BITMAP_VUNKNOWN;
+            return BITMAP_VUNKNOWN;
     }
 }
 
 static inline u64
 bitmap_get_colorcount(BitmapCoreHeader* header) {
-    return pow(2, header->BitCount * header->Planes);
+    return (u64) pow(2, header->BitCount * header->Planes);
 }
 
 static inline void
 bitmap_read_info_from_file(BitmapHeader* header, BitmapCoreHeader* info, FILE* file) {
     fread(header, sizeof(BitmapHeader), 1, file);
     fread(info, sizeof(BitmapCoreHeader), 1, file);
-    
+
     // NOTE: Read remaining fields depending on the bitmap version
     u32 v0InfoSize = sizeof(BitmapCoreHeader);
     if (info->Size > v0InfoSize) {
         u08* infoPtr = (u08*) info;
         u32  infoSize = info->Size - sizeof(BitmapCoreHeader);
         assert(infoSize > 0);
-        
+
         fread(infoPtr + v0InfoSize, sizeof(u08), infoSize, file);
     }
 }
 
 static inline void
-bitmap_create_core(Bitmap* bitmap, s32 height, s32 width) {
+bitmap_create_core(Bitmap* bitmap, s16 width, s16 height) {
     BitmapCoreHeader* info = malloc(sizeof(BitmapCoreHeader));
     info->Size = sizeof(BitmapCoreHeader);
     info->Width = width;
     info->Height = height;
     info->Planes = 1;
     info->BitCount = 24;
-    
+
     u32 size = width * height * sizeof(RgbTriple);
-    
+
     bitmap->Info = (BitmapInfoHeader*) info;
-    
+
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
     bitmap->Header.Reserved[1] = 0;
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + size;
-    
+
     bitmap->Data.Rgb = malloc(size);
 }
 
 static inline void
-bitmap_create_v1(Bitmap* bitmap, s32 height, s32 width) {
+bitmap_create_v1(Bitmap* bitmap, s32 width, s32 height) {
     BitmapInfoHeader* info = malloc(sizeof(BitmapInfoHeader));
     info->Size = sizeof(BitmapInfoHeader);
     info->Width = width;
@@ -300,20 +301,20 @@ bitmap_create_v1(Bitmap* bitmap, s32 height, s32 width) {
     info->YPelsPerMeter = DPI72;
     info->UsedColors = 0x00;
     info->ImportantColors = 0x00;
-    
-    bitmap->Info = (BitmapInfoHeader*) info;
-    
+
+    bitmap->Info = info;
+
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
     bitmap->Header.Reserved[1] = 0;
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
-    
+
     bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void
-bitmap_create_v2(Bitmap* bitmap, s32 height, s32 width) {
+bitmap_create_v2(Bitmap* bitmap, s32 width, s32 height) {
     BitmapInfoV2Header* info = malloc(sizeof(BitmapInfoV2Header));
     info->Size = sizeof(BitmapInfoV2Header);
     info->Width = width;
@@ -329,20 +330,20 @@ bitmap_create_v2(Bitmap* bitmap, s32 height, s32 width) {
     info->RedMask   = 0x00FF0000;
     info->GreenMask = 0x0000FF00;
     info->BlueMask  = 0x000000FF;
-    
+
     bitmap->Info = (BitmapInfoHeader*) info;
-    
+
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
     bitmap->Header.Reserved[1] = 0;
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
-    
+
     bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void
-bitmap_create_v3(Bitmap* bitmap, s32 height, s32 width) {
+bitmap_create_v3(Bitmap* bitmap, s32 width, s32 height) {
     BitmapInfoV3Header* info = malloc(sizeof(BitmapInfoV3Header));
     info->Size = sizeof(BitmapInfoV3Header);
     info->Width = width;
@@ -359,20 +360,20 @@ bitmap_create_v3(Bitmap* bitmap, s32 height, s32 width) {
     info->GreenMask = 0x0000FF00;
     info->BlueMask  = 0x000000FF;
     info->AlphaMask = 0xFF000000;
-    
+
     bitmap->Info = (BitmapInfoHeader*) info;
-    
+
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
     bitmap->Header.Reserved[1] = 0;
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
-    
+
     bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void
-bitmap_create_v4(Bitmap* bitmap, s32 height, s32 width) {
+bitmap_create_v4(Bitmap* bitmap, s32 width, s32 height) {
     BitmapInfoV4Header* info = malloc(sizeof(BitmapInfoV4Header));
     info->Size = sizeof(BitmapInfoV4Header);
     info->Width = width;
@@ -394,20 +395,23 @@ bitmap_create_v4(Bitmap* bitmap, s32 height, s32 width) {
     info->GammaRed   = 0;
     info->GammaGreen = 0;
     info->GammaBlue  = 0;
-    
+
     bitmap->Info = (BitmapInfoHeader*) info;
-    
+
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
     bitmap->Header.Reserved[1] = 0;
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
-    
+
     bitmap->Data.Rgba = malloc(info->SizeImage);
 }
 
 static inline void
-bitmap_create_v5(Bitmap* bitmap, s32 height, s32 width) {
+bitmap_create_v5(Bitmap* bitmap, s32 width, s32 height) {
+    u32 rowSize = (u32) (floor((32.0 * width + 31.0) / 32.0) * 4.0);
+    u32 dataSize = rowSize * height;
+
     BitmapInfoV5Header* info = malloc(sizeof(BitmapInfoV5Header));
     info->Size = sizeof(BitmapInfoV5Header);
     info->Width = width;
@@ -415,7 +419,7 @@ bitmap_create_v5(Bitmap* bitmap, s32 height, s32 width) {
     info->Planes = 1;
     info->BitCount = 32;
     info->Compression = BI_BITFIELDS;
-    info->SizeImage = sizeof(RgbQuad) * height * width;
+    info->SizeImage = dataSize;
     info->XPelsPerMeter = DPI72;
     info->YPelsPerMeter = DPI72;
     info->UsedColors = 0x00;
@@ -433,16 +437,16 @@ bitmap_create_v5(Bitmap* bitmap, s32 height, s32 width) {
     info->ProfileData = 0;
     info->ProfileSize = 0;
     info->Reserved = 0;
-    
+
     bitmap->Info = (BitmapInfoHeader*) info;
-    
+
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
     bitmap->Header.Reserved[1] = 0;
     bitmap->Header.Offset = sizeof(BitmapHeader) + info->Size;
     bitmap->Header.Size = bitmap->Header.Offset + info->SizeImage;
-    
-    bitmap->Data.Rgba = malloc(info->SizeImage);
+
+    bitmap->Data.Bytes = malloc(info->SizeImage);
 }
 
 static inline void
@@ -453,7 +457,7 @@ create_bitmap(Bitmap* bitmap, BitmapHeader* header, BitmapInfoHeader* bitmapInfo
     header->Reserved[0] = 0;
     header->Reserved[1] = 0;
     header->Offset = sizeof(BitmapHeader) + bitmapInfo->Size;
-    
+
     bitmap->Header = *header;
     bitmap->Info = bitmapInfo;
     bitmap->Data.Bytes = data;
@@ -471,25 +475,25 @@ write_bitmap_to_file(Bitmap* bitmap, FILE* file) {
     assert(bitmap->Info->Size != 0);
     fwrite(&bitmap->Header, sizeof(BitmapHeader), 1, file);
     fwrite(bitmap->Info, bitmap->Info->Size, 1, file);
-    
+
     if (bitmap_version(bitmap->Info) == BITMAP_VCORE) {
-        u32 size = bitmap->Info->Width * bitmap->Info->Height * (bitmap->Info->BitCount / 8);
-        
+        u32 size = (u32) (bitmap->Info->Width * bitmap->Info->Height * (bitmap->Info->BitCount / 8));
+
         fwrite(bitmap->Data.Bytes, sizeof(u08), size, file);
         return;
     }
-    
+
     fwrite(bitmap->Data.Bytes, sizeof(u08), bitmap->Info->SizeImage, file);
 }
 
 static inline void
-display_palette(BitmapInfoHeader* header, u08* data) {
+display_palette(BitmapInfoHeader* header) {
     //assert(header->UsedColors != 0x00);
     if(header->UsedColors == 0x00) return;
-    
+
     // TODO: Handle BitmapCoreHeader using RgbTriple for colors instead of RgbQuad
     RgbQuad* palette = malloc(sizeof(RgbQuad) * header->UsedColors);
-    
+
     for (u16 i = 0; i < header->UsedColors; i++) {
         RgbQuad rgb = palette[i];
         u32 color = *((u32*) palette + i);
@@ -538,16 +542,69 @@ log_bitmapinfo(BitmapInfoHeader* header, FILE* file) {
 u16
 power(u16 base, u16 power) {
     if (power == 0) return 1;
-    
+
     u16 result = base;;
     for (u16 n = 1; n < power; n++)
         result *= base;
-    
+
     return result;
 }
 
 static inline u08*
-bitmap_load(FILE* file, u32* width, u32* height) {
+bitmap_load_core(FILE* file, s32* width, s32* height) {
+    BitmapHeader header;
+    BitmapCoreHeader info;
+    bitmap_read_info(&header, &info, file);
+
+    *width = info.Width;
+    *height = info.Height;
+
+    u32 rowSize = (u32) (floor((info.BitCount * info.Width + 32.0) / 31.0) * 4);
+    u32 rowOffset = (info.Width * info.BitCount / 8) - rowSize;
+    u32 dataSize = rowSize * info.Height;
+
+    u08* data = malloc(dataSize);
+    fread(data, sizeof(u08), dataSize, file);
+
+    u08* result = malloc(info.Width * info.Height * sizeof(RgbQuad));
+    RgbQuad* rgb = (RgbQuad*) result;
+
+    // NOTE: Core bitmaps are either (1, 4 or 8) bpp bitmaps using the colortable or 24 bpp BGR bitmaps
+    assert(info.BitCount == 1 || info.BitCount == 4 || info.BitCount == 8 || info.BitCount == 24);
+    if (info.BitCount == 24) {
+        // TODO: Handle 24bpp core bitmaps
+    }
+    else {
+        u32 colorCount = power(2, info.BitCount * info.Planes);
+        RgbTriple* colors = (RgbTriple*) data;
+
+        s32 pixelMask = power(2, info.BitCount) - 1;
+        u08* pixelData = (u08*) (colors + colorCount);
+
+        u64 n = 0; s32 j = 0;
+        for (u32 i = 0; i < dataSize; i++) {
+            for(j = 8 / info.BitCount - 1; j >= 0; j--) {
+                s32 mask = (pixelMask << j * info.BitCount);
+                s32 shift = j * info.BitCount;
+                s32 pixel = (pixelData[i] & mask) >> shift;
+                RgbTriple color = *(colors + pixel);
+
+                printf("Color %4llu: (%3u, %3u, %3u)\n", n, color.Red, color.Green, color.Blue);
+
+                RgbQuad value = { .Blue = color.Blue, .Green = color.Green, .Red = color.Red, .Alpha = 0xFF };
+                *rgb = value;
+
+                rgb++;
+                n++;
+            }
+        }
+    }
+
+    return result;
+}
+
+static inline u08*
+bitmap_load(FILE* file, s32* width, s32* height) {
     BitmapHeader header;
     union {
         BitmapCoreHeader core;
@@ -558,46 +615,91 @@ bitmap_load(FILE* file, u32* width, u32* height) {
         BitmapInfoV5Header v5;
     } info;
     bitmap_read_info(&header, &info.core, file);
-    
-    *width = info.core.Width;
-    *height = info.core.Height;
-    
-    u32 rowSize = floor((info.core.BitCount * info.core.Width + 32.0) / 32.0) * 4;
-    u32 rowOffset = (info.core.Width * info.core.BitCount / 8) - rowSize;
-    u32 dataSize = rowSize * info.core.Height;
-    
+
+    // NOTE: Core bitmaps have a different info header, so we handle them seperately
+    u32 version = bitmap_version(&info.core);
+    if (version == BITMAP_VCORE) {
+        return bitmap_load_core(file, width, height);
+    }
+
+    *width = info.v1.Width;
+    *height = info.v1.Height;
+
+    u32 rowSize = (u32) (floor((info.v1.BitCount * info.v1.Width + 31.0) / 32.0) * 4);
+    u32 rowOffset = (u32) (rowSize - ceil(info.v1.Width * info.v1.BitCount / 8.0));
+    u32 dataSize = rowSize * info.v1.Height;
+
     u08* data = malloc(dataSize);
-    u08* result = malloc(info.core.Width * info.core.Height * sizeof(RgbQuad));
     fread(data, sizeof(u08), dataSize, file);
-    
+
+    u08* result = malloc(info.v1.Width * info.v1.Height * sizeof(RgbQuad));
+    RgbQuad* rgb = (RgbQuad*) result;
+
     // Bitmap using the colortable
-    if (info.core.BitCount < 16) {
-        u32 colorCount = power(2, info.core.BitCount * info.core.Planes);
+    if (info.v1.BitCount < 16) {
+        // TODO: Handle error in UsedColors (IE. set to 0)
+        //u32 colorCount = power(2, info.v1.BitCount * info.v1.Planes);
+        u32 colorCount = info.v1.UsedColors;
         RgbQuad* colors = (RgbQuad*) data;
-        
-        u16 pixelMask = power(2, bitmapInfo->BitCount) - 1;
-        u08* pixelData = (u08*) ((RgbQuad*) bitmapData + colorCount);
-        
-        u32 n = 0, j = 0;
-        for (u32 i = 0; i < dataSize; i++) {
-            for(s16 j = 8 / info.core.BitCount - 1; j >= 0; j--) {
-                u08 mask = (pixelMask << j * info.core.BitCount);
-                u08 shift = j * info.core.BitCount;
-                u08 pixel = (pixelData[i] & mask) >> shift;
-                RgbQuad color = colors + pixel;
-                
-                // TODO: Do something with the color from the colortable
-                
-                n++;
+
+        s32 pixelMask = power(2, info.v1.BitCount) - 1;
+        u08* pixelData = (u08*) (colors + colorCount);
+
+        u16 n = 0;
+        s32 columns = rowSize - rowOffset;
+        s32 remainingBits = info.v1.Width * info.v1.BitCount % 8;
+        for (s32 row = 0; row <= info.v1.Height; row++) {
+
+            n = 0;
+            for (s32 column = 0; column < columns; column++) {
+                s32 colorsInByte = (column + 1 == columns ? remainingBits : 8) / info.v1.BitCount;
+
+                for(s32 j = colorsInByte - 1; j >= 0; j--) {
+                    s32 mask = (pixelMask << j * info.v1.BitCount);
+                    s32 shift = j * info.v1.BitCount;
+                    s32 pixel = (*pixelData & mask) >> shift;
+                    RgbQuad color = *(colors + pixel);
+
+                    *rgb = color;
+                    printf("Color is %6x\n", *((u32*) rgb));
+                    rgb++;
+                    n++;
+                }
+
+                pixelData++;
             }
+            pixelData += rowOffset;
+            printf("_______________ %i\n", n);
         }
     }
-    
-    else if (info.core.BitCount < 16) {
+    else if (info.v1.BitCount < 16) {
         assert(dataSize == info.v1.SizeImage);
     }
-    
+
     return result;
+}
+
+static inline void
+bitmap_save(FILE* file, s32 width, s32 height, u08* data) {
+    Bitmap bitmap;
+    bitmap_create_v1(&bitmap, width, height);
+
+    u32 rowSize = (bitmap.Info->SizeImage / sizeof(RgbQuad)) / bitmap.Info->Height;
+    u32 rowOffset = rowSize - bitmap.Info->Width;
+
+    u08* output = bitmap.Data.Bytes;
+    for (s32 row = 0; row < bitmap.Info->Height; row++) {
+        for (s32 x = 0; x < bitmap.Info->Width; x++) {
+            RgbQuad* rgb = (RgbQuad*) output;
+            *rgb = *((RgbQuad*) data);
+
+            data += sizeof(RgbQuad);
+            output += sizeof(RgbQuad);
+        }
+        output += rowOffset;
+    }
+
+    write_bitmap_to_file(&bitmap, file);
 }
 
 #endif // BITMAP_H

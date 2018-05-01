@@ -77,7 +77,7 @@ typedef union v3
         v2 uv;
         real32 Ignored2_;
     };
-    
+
     f32 E[3];
 } v3;
 
@@ -150,7 +150,7 @@ inline static f32_4x
 f32_4x_set(f32 f0, f32 f1, f32 f2, f32 f3) {
     f32_4x result;
     result.P = _mm_set_ps(f3, f2, f1, f0);
-    
+
     return result;
 }
 
@@ -158,7 +158,7 @@ inline static f32_4x
 f32_4x_set_all(f32 all) {
     f32_4x result;
     result.P = _mm_set1_ps(all);
-    
+
     return result;
 }
 
@@ -166,7 +166,7 @@ inline static f32_4x
 f32_4x_zero() {
     f32_4x result;
     result.P = _mm_setzero_ps();
-    
+
     return result;
 }
 
@@ -174,7 +174,7 @@ inline static f32_4x
 f32_4x_add(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_add_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -182,7 +182,7 @@ inline static f32_4x
 f32_4x_sub(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_sub_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -190,7 +190,7 @@ inline static f32_4x
 f32_4x_mul(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_mul_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -198,7 +198,7 @@ inline static f32_4x
 f32_4x_div(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_div_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -206,7 +206,7 @@ inline static f32_4x
 f32_4x_xor(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_xor_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -214,7 +214,7 @@ inline static f32_4x
 f32_4x_or(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_or_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -222,7 +222,7 @@ inline static f32_4x
 f32_4x_and(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_and_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -230,7 +230,7 @@ inline static f32_4x
 f32_4x_lss(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_cmplt_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -238,7 +238,7 @@ inline static f32_4x
 f32_4x_leq(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_cmple_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -246,7 +246,7 @@ inline static f32_4x
 f32_4x_gtr(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_cmpgt_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -254,7 +254,7 @@ inline static f32_4x
 f32_4x_geq(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_cmpge_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -262,7 +262,7 @@ inline static f32_4x
 f32_4x_eql(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_cmpeq_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -270,7 +270,7 @@ inline static f32_4x
 f32_4x_neq(f32_4x left, f32_4x right) {
     f32_4x result;
     result.P = _mm_cmpneq_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -296,7 +296,7 @@ inline static f32_8x
 f32_8x_set(f32 f0, f32 f1, f32 f2, f32 f3, f32 f4, f32 f5, f32 f6, f32 f7) {
     f32_8x result;
     result.P = _mm256_set_ps(f7, f6, f5, f4, f3, f2, f1, f0);
-    
+
     return result;
 }
 
@@ -304,7 +304,7 @@ inline static f32_8x
 f32_8x_set_all(f32 all) {
     f32_8x result;
     result.P = _mm256_set1_ps(all);
-    
+
     return result;
 }
 
@@ -312,7 +312,7 @@ inline static f32_8x
 f32_8x_zero() {
     f32_8x result;
     result.P = _mm256_setzero_ps();
-    
+
     return result;
 }
 
@@ -320,7 +320,7 @@ inline static f32_8x
 f32_8x_add(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_add_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -328,7 +328,7 @@ inline static f32_8x
 f32_8x_sub(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_sub_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -336,7 +336,7 @@ inline static f32_8x
 f32_8x_mul(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_mul_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -344,7 +344,7 @@ inline static f32_8x
 f32_8x_div(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_div_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -352,7 +352,7 @@ inline static f32_8x
 f32_8x_xor(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_xor_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -360,7 +360,7 @@ inline static f32_8x
 f32_8x_or(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_or_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -368,7 +368,7 @@ inline static f32_8x
 f32_8x_and(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_and_ps(left.P, right.P);
-    
+
     return result;
 }
 
@@ -376,7 +376,7 @@ inline static f32_8x
 f32_8x_lss(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_cmp_ps(left.P, right.P, _CMP_LT_OQ);
-    
+
     return result;
 }
 
@@ -384,7 +384,7 @@ inline static f32_8x
 f32_8x_leq(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_cmp_ps(left.P, right.P, _CMP_LE_OQ);
-    
+
     return result;
 }
 
@@ -392,7 +392,7 @@ inline static f32_8x
 f32_8x_gtr(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_cmp_ps(left.P, right.P, _CMP_GT_OQ);
-    
+
     return result;
 }
 
@@ -400,7 +400,7 @@ inline static f32_8x
 f32_8x_geq(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_cmp_ps(left.P, right.P, _CMP_GE_OQ);
-    
+
     return result;
 }
 
@@ -408,7 +408,7 @@ inline static f32_8x
 f32_8x_eql(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_cmp_ps(left.P, right.P, _CMP_EQ_OQ);
-    
+
     return result;
 }
 
@@ -416,7 +416,7 @@ inline static f32_8x
 f32_8x_neq(f32_8x left, f32_8x right) {
     f32_8x result;
     result.P = _mm256_cmp_ps(left.P, right.P, _CMP_NEQ_OQ);
-    
+
     return result;
 }
 
