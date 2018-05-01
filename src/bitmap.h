@@ -572,7 +572,21 @@ bitmap_load_core(FILE* file, s32* width, s32* height) {
     // NOTE: Core bitmaps are either (1, 4 or 8) bpp bitmaps using the colortable or 24 bpp BGR bitmaps
     assert(info.BitCount == 1 || info.BitCount == 4 || info.BitCount == 8 || info.BitCount == 24);
     if (info.BitCount == 24) {
+        u08* pixelData = malloc(dataSize);
+        fread(pixelData, sizeof(u08), dataSize, file);
+        
         // TODO: Handle 24bpp core bitmaps
+        for (s32 row = 0; row < info.Height; row++) {
+            for (s32 column = 0; column < rowSize - rowOffset; column++) {
+                memcpy(rgb, pixelData, sizeof(RgbTriple));
+                rgb->Alpha = 0xFF;
+                
+                rgb++;
+                pixelData += sizeof(RgbTriple);
+            }
+            
+            pixelData += rowOffset;
+        }
     }
     else {
         // TODO: Handle missing colorcount, IE set to 0?
