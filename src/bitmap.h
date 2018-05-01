@@ -575,28 +575,44 @@ bitmap_load_core(FILE* file, s32* width, s32* height) {
         // TODO: Handle 24bpp core bitmaps
     }
     else {
+        // TODO: Handle missing colorcount, IE set to 0?
         u32 colorCount = power(2, info.BitCount * info.Planes);
-        RgbTriple* colors = (RgbTriple*) data;
+        RgbTriple* colors = malloc(sizeof(RgbTriple) * colorCount);
+        fread(colors, sizeof(RgbQuad), colorCount, file);
         
         s32 pixelMask = power(2, info.BitCount) - 1;
-        u08* pixelData = (u08*) (colors + colorCount);
+        u08* pixelData = malloc(dataSize);
+        fread(pixelData, sizeof(u08), dataSize, file);
         
-        u64 n = 0; s32 j = 0;
-        for (u32 i = 0; i < dataSize; i++) {
-            for(j = 8 / info.BitCount - 1; j >= 0; j--) {
-                s32 mask = (pixelMask << j * info.BitCount);
-                s32 shift = j * info.BitCount;
-                s32 pixel = (pixelData[i] & mask) >> shift;
-                RgbTriple color = *(colors + pixel);
+        // NOTE: Number of columns in the image (width in bytes)
+        s32 columns = rowSize - rowOffset;
+        
+        // NOTE: Number of "spare" bits at the end of the last byte in each row
+        s32 bitsMod8 = info.Width * info.BitCount % 8;
+        s32 remainingBits = bitsMod8 == 0 ? 8 : bitsMod8;
+        
+        // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
+        for (s32 row = 0; row < info.Height; row++) {
+            for (s32 column = 0; column < columns; column++) {
+                // NOTE: Ammount of colors / pixels in each byte (differs for the last byte depending on pixel width)
+                // Extrashift is the extra shift used for the last byte (since data is stored little endian)
+                s32 colorsInByte = (column + 1 == columns ? remainingBits : 8) / info.BitCount;
+                s32 extraShift  = (column + 1 == columns ? 8 / info.BitCount - colorsInByte : 0);
                 
-                printf("Color %4llu: (%3u, %3u, %3u)\n", n, color.Red, color.Green, color.Blue);
+                for(s32 j = colorsInByte - 1; j >= 0; j--) {
+                    s32 mask = (pixelMask << (j + extraShift) * info.BitCount);
+                    s32 shift = (j + extraShift) * info.BitCount;
+                    s32 pixel = (*pixelData & mask) >> shift;
+                    
+                    memcpy(rgb, colors + pixel, sizeof(RgbTriple));
+                    rgb->Alpha = 0xFF;
+                    rgb++;
+                }
                 
-                RgbQuad value = { .Blue = color.Blue, .Green = color.Green, .Red = color.Red, .Alpha = 0xFF };
-                *rgb = value;
-                
-                rgb++;
-                n++;
+                pixelData++;
             }
+            
+            pixelData += rowOffset;
         }
     }
     
@@ -636,7 +652,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     if (info.v1.BitCount < 16) {
         // TODO: Handle missing colorcount, IE set to 0?
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
-        u32 colorCount = max(info.v1.UsedColors, maxColorCount);
+        u32 colorCount = min(info.v1.UsedColors, maxColorCount);
         RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
         fread(colors, sizeof(RgbQuad), colorCount, file);
         
@@ -668,8 +684,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     *rgb = color;
                     rgb++;
                 }
+                
                 pixelData++;
             }
+            
             pixelData += rowOffset;
         }
     }
