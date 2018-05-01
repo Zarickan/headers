@@ -695,7 +695,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     s32 pixel = (*pixelData & mask) >> shift;
                     RgbQuad color = *(colors + pixel);
                     
+                    // NOTE: In colortables alpha is inverted (for some odd reason?)
                     *rgb = color;
+                    rgb->Alpha = 0xFF - rgb->Alpha;
                     rgb++;
                 }
                 
@@ -715,7 +717,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
 static inline void
 bitmap_save(FILE* file, s32 width, s32 height, u08* data) {
     Bitmap bitmap;
-    bitmap_create_v1(&bitmap, width, height);
+    bitmap_create_v5(&bitmap, width, height);
     
     u32 rowSize = (bitmap.Info->SizeImage / sizeof(RgbQuad)) / bitmap.Info->Height;
     u32 rowOffset = rowSize - bitmap.Info->Width;
