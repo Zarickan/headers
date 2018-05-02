@@ -7,6 +7,23 @@ int main(int argc, char** argv)
 {
     // Input files
     char* images[] = {
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pixeldata-toomuch.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\planes-large.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\planes-zero.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\reserved1-bad.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\reserved2-bad.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\8bpp-pixels-not-in-palette.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\filesize-bad.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\filesize-zero.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pels-per-meter-x-large.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pels-per-meter-x-negative.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pels-per-meter-x-zero.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pels-per-meter-y-large.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pels-per-meter-y-negative.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pels-per-meter-y-zero.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_input\\4bpp-topdown-320x240.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_input\\8bpp-topdown-320x240.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_input\\1bpp-topdown-320x240.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_input\\1bpp-324x240.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_input\\1bpp-325x240.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_input\\1bpp-326x240.bmp",
@@ -40,7 +57,9 @@ int main(int argc, char** argv)
         "C:\\Users\\frede\\Repositories\\headers\\test_input\\1bpp-320x240-overlappingcolor.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_input\\1bpp-321x240.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_input\\1bpp-322x240.bmp",
-        "C:\\Users\\frede\\Repositories\\headers\\test_input\\1bpp-323x240.bmp"
+        "C:\\Users\\frede\\Repositories\\headers\\test_input\\1bpp-323x240.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_input\\8bpp-colorsimportant-two.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_input\\8bpp-colorsused-zero.bmp"
     };
     
     char outputFile[500];

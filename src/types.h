@@ -16,6 +16,7 @@ typedef uintptr_t uintptr;
 
 #define MIN(left, right) ((left) <= (right) ? (left) : (right))
 #define MAX(left, right) ((left) >= (left) ? (right) : (right))
+#define ABS(value) ((value) < 0 ? -(value) : (value))
 
 // Integers
 typedef uint8_t  u8;

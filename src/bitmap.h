@@ -653,20 +653,22 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     }
     
     *width = info.v1.Width;
-    *height = info.v1.Height;
+    *height = ABS(info.v1.Height);
     
     // NOTE: Rows are fit to a DWORD (4 byte) boundary (32 is BPP of output, 31 is bpp - 1 bit)
     u32 rowSize = (u32) (floor((info.v1.BitCount * info.v1.Width + 31.0) / 32.0) * 4);
     u32 rowOffset = (u32) (rowSize - ceil(info.v1.Width * info.v1.BitCount / 8.0));
-    u32 dataSize = rowSize * info.v1.Height;
+    u32 dataSize = rowSize * ABS(info.v1.Height);
     
-    u08* result = malloc(info.v1.Width * info.v1.Height * sizeof(RgbQuad));
+    // NOTE: If row is negative image is in the oposite direction, so reverse this point
+    u08* result = malloc(info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
     RgbQuad* rgb = (RgbQuad*) result;
     
     if (info.v1.BitCount < 16) {
-        // TODO: Handle missing colorcount, IE set to 0?
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
         u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
+        colorCount = colorCount == 0 ? maxColorCount : colorCount;
+        
         RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
         fread(colors, sizeof(RgbQuad), colorCount, file);
         
@@ -683,7 +685,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         remainingBits = remainingBits == 0 ? 8 : remainingBits;
         
         // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
-        for (s32 row = 0; row < info.v1.Height; row++) {
+        for (s32 row = 0; row < ABS(info.v1.Height); row++) {
             for (s32 column = 0; column < columns; column++) {
                 // NOTE: Ammount of colors / pixels in each byte (differs for the last byte depending on pixel width)
                 // Extrashift is the extra shift used for the last byte (since data is stored little endian)
@@ -708,11 +710,27 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             pixelData += rowOffset;
         }
         
+        // NOTE: Swap the rows for images that are top-down
+        // TODO: Optimization, can this be done while reading the data?
+        if (info.v1.Height < 0) {
+            u32* rawData = (u32*) result;
+            for (s32 row = 0; row < (*height) / 2; row++) {
+                for (s32 column = 0; column < (*width); column++) {
+                    u32 src = (*width) * row + column;
+                    u32 tgt = (*width) * ((*height) - row - 1) + column;
+                    
+                    rawData[src] ^= rawData[tgt];
+                    rawData[tgt] ^= rawData[src];
+                    rawData[src] ^= rawData[tgt];
+                }
+            }
+        }
+        
         free(data);
         free(colors);
     }
     // NOTE: 16bpp RGB images
-    else if (info.v1.compression == BI_RGB && info.v1.BitCount == 16) {
+    else if (info.v1.Compression == BI_RGB && info.v1.BitCount == 16) {
         assert(dataSize == info.v1.SizeImage);
         
         u16 redMask   = 0xF800;
@@ -724,7 +742,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         // TODO: Extract
     }
     // NOTE: 24bpp RGB images
-    else if (info.v1.compression == BI_RGB && info.v1.BitCount == 24) {
+    else if (info.v1.Compression == BI_RGB && info.v1.BitCount == 24) {
         
         u32 redMask   = 0xFF0000;
         u32 greenMask = 0x00FF00;
@@ -735,7 +753,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         // TODO: Extract
     }
     // NOTE: 32bpp RGB images
-    else if (info.v1.compression == BI_RGB && info.v1.BitCount == 24) {
+    else if (info.v1.Compression == BI_RGB && info.v1.BitCount == 24) {
         
         u32 redMask   = 0xFF000000;
         u32 greenMask = 0x00FF0000;
@@ -771,7 +789,7 @@ bitmap_save(FILE* file, s32 width, s32 height, u08* data) {
     
     write_bitmap_to_file(&bitmap, file);
     free(bitmap.Info);
-    free(bitmap.Data);
+    free(bitmap.Data.Bytes);
 }
 
 #endif // BITMAP_H
