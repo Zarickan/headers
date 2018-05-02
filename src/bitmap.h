@@ -666,7 +666,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     if (info.v1.BitCount < 16) {
         // TODO: Handle missing colorcount, IE set to 0?
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
-        u32 colorCount = min(info.v1.UsedColors, maxColorCount);
+        u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
         RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
         fread(colors, sizeof(RgbQuad), colorCount, file);
         
