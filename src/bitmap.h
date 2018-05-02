@@ -539,12 +539,12 @@ log_bitmapinfo(BitmapInfoHeader* header, FILE* file) {
     fprintf(file, "    ImportantColors: 0x%x\n", header->ImportantColors);
 }
 
-u16
-power(u16 base, u16 power) {
+u32
+power(u32 base, u32 power) {
     if (power == 0) return 1;
     
-    u16 result = base;;
-    for (u16 n = 1; n < power; n++)
+    u32 result = base;;
+    for (u32 n = 1; n < power; n++)
         result *= base;
     
     return result;
@@ -665,6 +665,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     RgbQuad* rgb = (RgbQuad*) result;
     
     if (info.v1.BitCount < 16) {
+        info.v1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
         u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
         colorCount = colorCount == 0 ? maxColorCount : colorCount;

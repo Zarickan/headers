@@ -7,9 +7,9 @@ int main(int argc, char** argv)
 {
     // Input files
     char* images[] = {
-        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pixeldata-toomuch.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\planes-large.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\planes-zero.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pixeldata-toomuch.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\reserved1-bad.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\reserved2-bad.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\8bpp-pixels-not-in-palette.bmp",
