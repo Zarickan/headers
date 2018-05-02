@@ -671,15 +671,16 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         fread(colors, sizeof(RgbQuad), colorCount, file);
         
         s32 pixelMask = power(2, info.v1.BitCount) - 1;
-        u08* pixelData = malloc(dataSize);
+        u08* data = malloc(dataSize);
+        u08* pixelData = data;
         fread(pixelData, sizeof(u08), dataSize, file);
         
         // NOTE: Number of columns in the image (width in bytes)
         s32 columns = rowSize - rowOffset;
         
         // NOTE: Number of "spare" bits at the end of the last byte in each row
-        s32 bitsMod8 = info.v1.Width * info.v1.BitCount % 8;
-        s32 remainingBits = bitsMod8 == 0 ? 8 : bitsMod8;
+        s32 remainingBits = info.v1.Width * info.v1.BitCount % 8;
+        remainingBits = remainingBits == 0 ? 8 : remainingBits;
         
         // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
         for (s32 row = 0; row < info.v1.Height; row++) {
@@ -706,6 +707,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             
             pixelData += rowOffset;
         }
+        
+        free(data);
+        free(colors);
     }
     else if (info.v1.BitCount < 16) {
         assert(dataSize == info.v1.SizeImage);
@@ -717,7 +721,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
 static inline void
 bitmap_save(FILE* file, s32 width, s32 height, u08* data) {
     Bitmap bitmap;
-    bitmap_create_v5(&bitmap, width, height);
+    bitmap_create_v1(&bitmap, width, height);
     
     u32 rowSize = (bitmap.Info->SizeImage / sizeof(RgbQuad)) / bitmap.Info->Height;
     u32 rowOffset = rowSize - bitmap.Info->Width;
