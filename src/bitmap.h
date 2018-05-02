@@ -664,6 +664,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     u08* result = malloc(info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
     RgbQuad* rgb = (RgbQuad*) result;
     
+    if (!*width || !*height)
+        return result;
+    
     if (info.v1.BitCount < 16) {
         info.v1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
@@ -777,7 +780,8 @@ bitmap_save(FILE* file, s32 width, s32 height, u08* data) {
     Bitmap bitmap;
     bitmap_create_v1(&bitmap, width, height);
     
-    u32 rowSize = (bitmap.Info->SizeImage / sizeof(RgbQuad)) / bitmap.Info->Height;
+    s32 h = bitmap.Info->Height == 0 ? 1 : bitmap.Info->Height;
+    u32 rowSize = (bitmap.Info->SizeImage / sizeof(RgbQuad)) / h;
     u32 rowOffset = rowSize - bitmap.Info->Width;
     
     u08* output = bitmap.Data.Bytes;
