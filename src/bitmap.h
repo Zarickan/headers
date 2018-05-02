@@ -711,8 +711,39 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         free(data);
         free(colors);
     }
-    else if (info.v1.BitCount < 16) {
+    // NOTE: 16bpp RGB images
+    else if (info.v1.compression == BI_RGB && info.v1.BitCount == 16) {
         assert(dataSize == info.v1.SizeImage);
+        
+        u16 redMask   = 0xF800;
+        u16 greenMask = 0x07C0;
+        u16 blueMask  = 0x003E;
+        u16 alphaMask = 0x0000;
+        u16 xMask     = 0x0001;
+        
+        // TODO: Extract
+    }
+    // NOTE: 24bpp RGB images
+    else if (info.v1.compression == BI_RGB && info.v1.BitCount == 24) {
+        
+        u32 redMask   = 0xFF0000;
+        u32 greenMask = 0x00FF00;
+        u32 blueMask  = 0x0000FF;
+        u32 alphaMask = 0x000000;
+        u32 xMask     = 0x000000;
+        
+        // TODO: Extract
+    }
+    // NOTE: 32bpp RGB images
+    else if (info.v1.compression == BI_RGB && info.v1.BitCount == 24) {
+        
+        u32 redMask   = 0xFF000000;
+        u32 greenMask = 0x00FF0000;
+        u32 blueMask  = 0x0000FF00;
+        u32 alphaMask = 0x00000000;
+        u32 xMask     = 0x000000FF;
+        
+        // TODO: Extract
     }
     
     return result;
