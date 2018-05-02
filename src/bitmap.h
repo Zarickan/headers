@@ -696,6 +696,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     s32 mask = (pixelMask << (j + extraShift) * info.v1.BitCount);
                     s32 shift = (j + extraShift) * info.v1.BitCount;
                     s32 pixel = (*pixelData & mask) >> shift;
+                    
+                    if (pixel > colorCount)
+                        pixel = 0;
+                    
                     RgbQuad color = *(colors + pixel);
                     
                     // NOTE: In colortables alpha is inverted (for some odd reason?)
