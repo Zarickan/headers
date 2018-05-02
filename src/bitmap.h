@@ -666,20 +666,21 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     if (info.v1.BitCount < 16) {
         // TODO: Handle missing colorcount, IE set to 0?
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
-        u32 colorCount = min(info.v1.UsedColors, maxColorCount);
+        u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
         RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
         fread(colors, sizeof(RgbQuad), colorCount, file);
         
         s32 pixelMask = power(2, info.v1.BitCount) - 1;
-        u08* pixelData = malloc(dataSize);
+        u08* data = malloc(dataSize);
+        u08* pixelData = data;
         fread(pixelData, sizeof(u08), dataSize, file);
         
         // NOTE: Number of columns in the image (width in bytes)
         s32 columns = rowSize - rowOffset;
         
         // NOTE: Number of "spare" bits at the end of the last byte in each row
-        s32 bitsMod8 = info.v1.Width * info.v1.BitCount % 8;
-        s32 remainingBits = bitsMod8 == 0 ? 8 : bitsMod8;
+        s32 remainingBits = info.v1.Width * info.v1.BitCount % 8;
+        remainingBits = remainingBits == 0 ? 8 : remainingBits;
         
         // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
         for (s32 row = 0; row < info.v1.Height; row++) {
@@ -706,9 +707,43 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             
             pixelData += rowOffset;
         }
+        
+        free(data);
+        free(colors);
     }
-    else if (info.v1.BitCount < 16) {
+    // NOTE: 16bpp RGB images
+    else if (info.v1.compression == BI_RGB && info.v1.BitCount == 16) {
         assert(dataSize == info.v1.SizeImage);
+        
+        u16 redMask   = 0xF800;
+        u16 greenMask = 0x07C0;
+        u16 blueMask  = 0x003E;
+        u16 alphaMask = 0x0000;
+        u16 xMask     = 0x0001;
+        
+        // TODO: Extract
+    }
+    // NOTE: 24bpp RGB images
+    else if (info.v1.compression == BI_RGB && info.v1.BitCount == 24) {
+        
+        u32 redMask   = 0xFF0000;
+        u32 greenMask = 0x00FF00;
+        u32 blueMask  = 0x0000FF;
+        u32 alphaMask = 0x000000;
+        u32 xMask     = 0x000000;
+        
+        // TODO: Extract
+    }
+    // NOTE: 32bpp RGB images
+    else if (info.v1.compression == BI_RGB && info.v1.BitCount == 24) {
+        
+        u32 redMask   = 0xFF000000;
+        u32 greenMask = 0x00FF0000;
+        u32 blueMask  = 0x0000FF00;
+        u32 alphaMask = 0x00000000;
+        u32 xMask     = 0x000000FF;
+        
+        // TODO: Extract
     }
     
     return result;
@@ -717,7 +752,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
 static inline void
 bitmap_save(FILE* file, s32 width, s32 height, u08* data) {
     Bitmap bitmap;
-    bitmap_create_v5(&bitmap, width, height);
+    bitmap_create_v1(&bitmap, width, height);
     
     u32 rowSize = (bitmap.Info->SizeImage / sizeof(RgbQuad)) / bitmap.Info->Height;
     u32 rowOffset = rowSize - bitmap.Info->Width;
