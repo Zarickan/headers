@@ -735,6 +735,8 @@ bitmap_save(FILE* file, s32 width, s32 height, u08* data) {
     }
     
     write_bitmap_to_file(&bitmap, file);
+    free(bitmap.Info);
+    free(bitmap.Data);
 }
 
 #endif // BITMAP_H
