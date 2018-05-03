@@ -7,6 +7,11 @@ int main(int argc, char** argv)
 {
     // Input files
     char* images[] = {
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\8bpp-colorsimportant-large.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\palette-too-big.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\32bpp-0x0.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\32bpp-0x240.bmp",
+        "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\32bpp-320x0.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\planes-large.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\planes-zero.bmp",
         "C:\\Users\\frede\\Repositories\\headers\\test_corrupt\\pixeldata-toomuch.bmp",
