@@ -633,6 +633,8 @@ bitmap_load_core(FILE* file, s32* width, s32* height) {
     return result;
 }
 
+#define MAP(v, wordSize) (u08) ((v) / (pow(2, (wordSize)) - 1) * 255)
+
 static inline u08*
 bitmap_load(FILE* file, s32* width, s32* height) {
     BitmapHeader header;
@@ -734,12 +736,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     // NOTE: BI_RGB without alpha
     else if (info.v1.Compression == BI_RGB && version <= 2) {
         s32 bitsPerColor = info.v1.BitCount / 3;
-        u32 redMask   = (0xFFFFFFFF >> (32 - bitsPerColor)) << (2 * bitsPerColor);
-        u32 greenMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (1 * bitsPerColor);
-        u32 blueMask  = (0xFFFFFFFF >> (32 - bitsPerColor)) << (0 * bitsPerColor);
-        
-        // NOTE: Skip the palette (in case image contains an optimized one)
-        fseek(file, info.v1.UsedColors * sizeof(RgbQuad), SEEK_CUR);
+        s32 bitsUnused = info.v1.BitCount % 3;
+        u32 redMask   = (0xFFFFFFFF >> (32 - bitsPerColor)) << (0 * bitsPerColor + bitsUnused);
+        u32 greenMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (1 * bitsPerColor + bitsUnused);
+        u32 blueMask  = (0xFFFFFFFF >> (32 - bitsPerColor)) << (2 * bitsPerColor + bitsUnused);
         
         data = malloc(dataSize);
         pixelData = data;
@@ -769,10 +769,15 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                         pixelData++;
                     }
                 }
+                value <<= bitsUnused;
+
+                u08 red   = MAP((value & redMask)   >> (0 * bitsPerColor + bitsUnused), bitsPerColor);
+                u08 green = MAP((value & greenMask) >> (1 * bitsPerColor + bitsUnused), bitsPerColor);
+                u08 blue  = MAP((value & blueMask)  >> (2 * bitsPerColor + bitsUnused), bitsPerColor);
                 
-                rgb->Red   = (u08) (value & redMask)   >> (2 * bitsPerColor);
-                rgb->Green = (u08) (value & greenMask) >> (1 * bitsPerColor);
-                rgb->Blue  = (u08) (value & blueMask)  >> (0 * bitsPerColor);
+                rgb->Red   = red;
+                rgb->Green = green;
+                rgb->Blue  = blue;
                 rgb->Alpha = 0xFF;
                 rgb++;
             }
@@ -782,10 +787,11 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     // NOTE: BI_RGB with alpha
     else if (info.v1.Compression == BI_RGB && version > 2) {
         s32 bitsPerColor = info.v1.BitCount / 4;
-        u32 redMask   = (0xFFFFFFFF >> (32 - bitsPerColor)) << (3 * bitsPerColor);
-        u32 greenMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (2 * bitsPerColor);
-        u32 blueMask  = (0xFFFFFFFF >> (32 - bitsPerColor)) << (1 * bitsPerColor);
-        u32 alphaMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (0 * bitsPerColor);
+        s32 bitsUnused = info.v1.BitCount % 4;
+        u32 redMask   = (0xFFFFFFFF >> (32 - bitsPerColor)) << (0 * bitsPerColor + bitsUnused);
+        u32 greenMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (1 * bitsPerColor + bitsUnused);
+        u32 blueMask  = (0xFFFFFFFF >> (32 - bitsPerColor)) << (2 * bitsPerColor + bitsUnused);
+        u32 alphaMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (3 * bitsPerColor + bitsUnused);
         
         data = malloc(dataSize);
         pixelData = data;
@@ -806,10 +812,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     pixelData++;
                 }
                 
-                rgb->Red   = (u08) (value & redMask)   >> (3 * bitsPerColor);
-                rgb->Green = (u08) (value & greenMask) >> (2 * bitsPerColor);
-                rgb->Blue  = (u08) (value & blueMask)  >> (1 * bitsPerColor);
-                rgb->Alpha = (u08) (value & alphaMask) >> (0 * bitsPerColor);
+                rgb->Red   = MAP((value & redMask)   >> (0 * bitsPerColor + bitsUnused), bitsPerColor);
+                rgb->Green = MAP((value & greenMask) >> (1 * bitsPerColor + bitsUnused), bitsPerColor);
+                rgb->Blue  = MAP((value & blueMask)  >> (2 * bitsPerColor + bitsUnused), bitsPerColor);
+                rgb->Alpha = MAP((value & alphaMask) >> (3 * bitsPerColor + bitsUnused), bitsPerColor);
                 rgb++;
             }
             pixelData += rowOffset;
@@ -821,24 +827,48 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         pixelData = data;
         fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
+
+        s32 redShift;
+        s32 greenShift;
+        s32 blueShift;
+        for (redShift = 0; redShift < 32 && !(info.v2.RedMask & power(2, redShift)); redShift++)
+            ;
+        for (greenShift = 0; greenShift < 32 && !(info.v2.GreenMask & power(2, greenShift)); greenShift++)
+            ;
+        for (blueShift = 0; blueShift < 32 && !(info.v2.BlueMask & power(2, blueShift)); blueShift++)
+            ;
         
         s32 columns = (rowSize - rowOffset) / (info.v1.BitCount / 8);
         for (s32 row = 0; row < ABS(info.v1.Height); row++) {
             for (s32 column = 0; column < columns; column++) {
                 u32 value = 0x00;
-                
-                for (s08 bytes = 0; bytes < info.v1.BitCount / 8; bytes++) {
-                    value |= *pixelData;
-                    
-                    if(bytes != info.v1.BitCount / 8 - 1)
-                        value <<= 8;
-                    
-                    pixelData++;
+
+                if (info.v1.BitCount == 16) {
+                    value = *((u16*) pixelData);
+                    pixelData += sizeof(u16);
                 }
+                else if (info.v1.BitCount == 32) {
+                    value = *((u32*) pixelData);
+                    pixelData += sizeof(u32);
+                }
+                else {
+                    for (s08 bytes = 0; bytes < info.v1.BitCount / 8; bytes++) {
+                        value |= *pixelData;
+
+                        if(bytes != info.v1.BitCount / 8 - 1)
+                            value <<= 8;
+
+                        pixelData++;
+                    }
+                }
+
+                u32 red = (value & info.v2.RedMask) >> redShift;
+                u32 green = (value & info.v2.GreenMask) >> greenShift;
+                u32 blue = (value & info.v2.BlueMask) >> blueShift;
                 
-                rgb->Red   = (u08) ((value & info.v2.RedMask)   >> (0));
-                rgb->Green = (u08) ((value & info.v2.GreenMask) >> (0));
-                rgb->Blue  = (u08) ((value & info.v2.BlueMask)  >> (0));
+                rgb->Red   = (u08) red;
+                rgb->Green = (u08) green;
+                rgb->Blue  = (u08) blue;
                 rgb->Alpha = 0xFF;
                 rgb++;
             }
