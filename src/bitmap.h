@@ -768,6 +768,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     rgb->Green = MAP(pixel.Green, 5);
                     rgb->Blue  = MAP(pixel.Blue, 5);
                     rgb->Alpha = pixel.Alpha ? 0x00 : 0xFF;
+                    // TODO: Currently supports alpha for bitmaps of versions that do _NOT_ support alpha,
+                    // primarily v1 and v2 bitmaps. Should this feature be kept?
+                    // Or only "enabled" when the version supports alpha/transparency?
                     
                     pixelData += sizeof(RgbDouble);
                 }
@@ -797,7 +800,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         }
     }
     // NOTE: BitFields
-    else if (info.v1.Compression == BI_BITFIELDS) {
+    else if (info.v1.Compression == BI_BITFIELDS || info.v1.Compression == BI_ALPHABITFIELDS) {
         s32 usesAlpha = !(version <= 2 && info.v1.Compression != BI_ALPHABITFIELDS);
         
         // NOTE: While v1 bitmaps have no fields for RGB bitmasks they come right after the info header,
@@ -827,7 +830,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             alphaBits = setbits(info.v3.AlphaMask);
         }
         
-        // NOTE: Without alpha
         s32 columns = (rowSize - rowOffset) / (info.v1.BitCount / 8);
         for (s32 row = 0; row < ABS(info.v1.Height); row++) {
             for (s32 column = 0; column < columns; column++) {
@@ -878,7 +880,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
 static inline void
 bitmap_save(FILE* file, s32 width, s32 height, const u08* data) {
     Bitmap bitmap;
-    bitmap_create_v1(&bitmap, width, height);
+    bitmap_create_v5(&bitmap, width, height);
     
     s32 h = bitmap.Info->Height == 0 ? 1 : bitmap.Info->Height;
     u32 rowSize = (bitmap.Info->SizeImage / sizeof(RgbQuad)) / h;
