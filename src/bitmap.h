@@ -569,7 +569,7 @@ bitmap_load_core(FILE* file, s32* width, s32* height) {
     u08* result = malloc(info.Width * info.Height * sizeof(RgbQuad));
     RgbQuad* rgb = (RgbQuad*) result;
     
-    // NOTE: Core bitmaps are either (1, 4 or 8) bpp bitmaps using the colortable or 24 bpp BGR bitmaps
+    // NOTE: Core bitmaps are either (1, 4 or 8) bpp bitmaps using the color table or 24 bpp BGR bitmaps
     assert(info.BitCount == 1 || info.BitCount == 4 || info.BitCount == 8 || info.BitCount == 24);
     if (info.BitCount == 24) {
         u08* pixelData = malloc(dataSize);
@@ -608,8 +608,8 @@ bitmap_load_core(FILE* file, s32* width, s32* height) {
         // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
         for (s32 row = 0; row < info.Height; row++) {
             for (s32 column = 0; column < columns; column++) {
-                // NOTE: Ammount of colors / pixels in each byte (differs for the last byte depending on pixel width)
-                // Extrashift is the extra shift used for the last byte (since data is stored little endian)
+                // NOTE: Amount of colors / pixels in each byte (differs for the last byte depending on pixel width)
+                // Extra shift is the extra shift used for the last byte (since data is stored little endian)
                 s32 colorsInByte = (column + 1 == columns ? remainingBits : 8) / info.BitCount;
                 s32 extraShift  = (column + 1 == columns ? 8 / info.BitCount - colorsInByte : 0);
                 
@@ -674,8 +674,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     if (!*width || !*height)
         return result;
     
-    u08* data;
-    u08* pixelData;
+    u08 *data = NULL;
+    u08* pixelData = NULL;
     
     if (info.v1.BitCount < 16) {
         info.v1.Planes = 1; // NOTE: Planes should always be 1
@@ -702,8 +702,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
         for (s32 row = 0; row < ABS(info.v1.Height); row++) {
             for (s32 column = 0; column < columns; column++) {
-                // NOTE: Ammount of colors / pixels in each byte (differs for the last byte depending on pixel width)
-                // Extrashift is the extra shift used for the last byte (since data is stored little endian)
+                // NOTE: Amount of colors / pixels in each byte (differs for the last byte depending on pixel width)
+                // Extra shift is the extra shift used for the last byte (since data is stored little endian)
                 s32 colorsInByte = (column + 1 == columns ? remainingBits : 8) / info.v1.BitCount;
                 s32 extraShift  = (column + 1 == columns ? 8 / info.v1.BitCount - colorsInByte : 0);
                 
@@ -717,9 +717,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     
                     RgbQuad color = *(colors + pixel);
                     
-                    // NOTE: In colortables alpha is inverted (for some odd reason?)
+                    // NOTE: In color tables alpha is inverted (for some odd reason?)
                     *rgb = color;
-                    rgb->Alpha = 0xFF - rgb->Alpha;
+                    rgb->Alpha = (u08) (0xFF - rgb->Alpha);
                     rgb++;
                 }
                 
@@ -733,8 +733,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     }
     // NOTE: BI_RGB without alpha
     else if (info.v1.Compression == BI_RGB && version <= 2) {
-        s08 bitsPerColor = info.v1.BitCount / 3;
-        s08 unusedBits = info.v1.BitCount % 3;
+        s32 bitsPerColor = info.v1.BitCount / 3;
         u32 redMask   = (0xFFFFFFFF >> (32 - bitsPerColor)) << (2 * bitsPerColor);
         u32 greenMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (1 * bitsPerColor);
         u32 blueMask  = (0xFFFFFFFF >> (32 - bitsPerColor)) << (0 * bitsPerColor);
@@ -771,9 +770,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     }
                 }
                 
-                rgb->Red   = (value & redMask)   >> (2 * bitsPerColor);
-                rgb->Green = (value & greenMask) >> (1 * bitsPerColor);
-                rgb->Blue  = (value & blueMask)  >> (0 * bitsPerColor);
+                rgb->Red   = (u08) (value & redMask)   >> (2 * bitsPerColor);
+                rgb->Green = (u08) (value & greenMask) >> (1 * bitsPerColor);
+                rgb->Blue  = (u08) (value & blueMask)  >> (0 * bitsPerColor);
                 rgb->Alpha = 0xFF;
                 rgb++;
             }
@@ -782,8 +781,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     }
     // NOTE: BI_RGB with alpha
     else if (info.v1.Compression == BI_RGB && version > 2) {
-        s08 bitsPerColor = info.v1.BitCount / 4;
-        s08 unusedBits = info.v1.BitCount % 4;
+        s32 bitsPerColor = info.v1.BitCount / 4;
         u32 redMask   = (0xFFFFFFFF >> (32 - bitsPerColor)) << (3 * bitsPerColor);
         u32 greenMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (2 * bitsPerColor);
         u32 blueMask  = (0xFFFFFFFF >> (32 - bitsPerColor)) << (1 * bitsPerColor);
@@ -808,10 +806,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     pixelData++;
                 }
                 
-                rgb->Red   = (value & redMask)   >> (3 * bitsPerColor);
-                rgb->Green = (value & greenMask) >> (2 * bitsPerColor);
-                rgb->Blue  = (value & blueMask)  >> (1 * bitsPerColor);
-                rgb->Alpha = (value & alphaMask) >> (0 * bitsPerColor);
+                rgb->Red   = (u08) (value & redMask)   >> (3 * bitsPerColor);
+                rgb->Green = (u08) (value & greenMask) >> (2 * bitsPerColor);
+                rgb->Blue  = (u08) (value & blueMask)  >> (1 * bitsPerColor);
+                rgb->Alpha = (u08) (value & alphaMask) >> (0 * bitsPerColor);
                 rgb++;
             }
             pixelData += rowOffset;
@@ -838,9 +836,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     pixelData++;
                 }
                 
-                rgb->Red   = (value & info.v2.RedMask)   >> (0);
-                rgb->Green = (value & info.v2.GreenMask) >> (0);
-                rgb->Blue  = (value & info.v2.BlueMask)  >> (0);
+                rgb->Red   = (u08) ((value & info.v2.RedMask)   >> (0));
+                rgb->Green = (u08) ((value & info.v2.GreenMask) >> (0));
+                rgb->Blue  = (u08) ((value & info.v2.BlueMask)  >> (0));
                 rgb->Alpha = 0xFF;
                 rgb++;
             }
@@ -870,10 +868,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     pixelData++;
                 }
                 
-                rgb->Red   = (value & info.v3.RedMask)   >> (0);
-                rgb->Green = (value & info.v3.GreenMask) >> (0);
-                rgb->Blue  = (value & info.v3.BlueMask)  >> (0);
-                rgb->Alpha = (value & info.v3.AlphaMask) >> (0);
+                rgb->Red   = (u08) ((value & info.v3.RedMask)   >> (0));
+                rgb->Green = (u08) ((value & info.v3.GreenMask) >> (0));
+                rgb->Blue  = (u08) ((value & info.v3.BlueMask)  >> (0));
+                rgb->Alpha = (u08) ((value & info.v3.AlphaMask) >> (0));
                 rgb++;
             }
             pixelData += rowOffset;
@@ -886,8 +884,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         u32* rawData = (u32*) result;
         for (s32 row = 0; row < (*height) / 2; row++) {
             for (s32 column = 0; column < (*width); column++) {
-                u32 src = (*width) * row + column;
-                u32 tgt = (*width) * ((*height) - row - 1) + column;
+                s32 src = (*width) * row + column;
+                s32 tgt = (*width) * ((*height) - row - 1) + column;
                 
                 rawData[src] ^= rawData[tgt];
                 rawData[tgt] ^= rawData[src];
@@ -895,13 +893,15 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             }
         }
     }
-    
-    free(data);
+
+    if (!data)
+        free(data);
+
     return result;
 }
 
 static inline void
-bitmap_save(FILE* file, s32 width, s32 height, u08* data) {
+bitmap_save(FILE* file, s32 width, s32 height, const u08* data) {
     Bitmap bitmap;
     bitmap_create_v1(&bitmap, width, height);
     
