@@ -7,9 +7,9 @@ int main(int argc, char** argv)
 {
     // Input files
     char* images[] = {
-        "test_input/555-1x1.bmp",
-        "test_input/555-320x240.bmp",
-        "test_input/555-321x240.bmp",
+        "test_input/offbits-zero.bmp",
+        "test_input/palette-too-big.bmp",
+        "test_input/8bpp-colorsimportant-large.bmp",
         "test_input/565-1x1.bmp",
         "test_input/565-320x240.bmp",
         "test_input/565-320x240-topdown.bmp",
@@ -23,6 +23,9 @@ int main(int argc, char** argv)
         "test_input/32bpp-101110-320x240.bmp",
         "test_input/32bpp-optimalpalette-320x240.bmp",
         "test_input/32bpp-topdown-320x240.bmp",
+        "test_input/555-1x1.bmp",
+        "test_input/555-320x240.bmp",
+        "test_input/555-321x240.bmp",
         "test_input/8bpp-topdown-320x240.bmp",
         "test_input/24bpp-1x1.bmp",
         "test_input/24bpp-320x240.bmp",
