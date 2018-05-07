@@ -17,6 +17,12 @@ int main(int argc, char** argv)
         "test_input/565-321x240-topdown.bmp",
         "test_input/565-322x240.bmp",
         "test_input/565-322x240-topdown.bmp",
+        "test_input/32bpp-1x1.bmp",
+        "test_input/32bpp-320x240.bmp",
+        "test_input/32bpp-888-optimalpalette-320x240.bmp",
+        "test_input/32bpp-101110-320x240.bmp",
+        "test_input/32bpp-optimalpalette-320x240.bmp",
+        "test_input/32bpp-topdown-320x240.bmp",
         "test_input/8bpp-topdown-320x240.bmp",
         "test_input/24bpp-1x1.bmp",
         "test_input/24bpp-320x240.bmp",
@@ -25,12 +31,6 @@ int main(int argc, char** argv)
         "test_input/24bpp-323x240.bmp",
         "test_input/24bpp-imagesize-zero.bmp",
         "test_input/24bpp-topdown-320x240.bmp",
-        "test_input/32bpp-1x1.bmp",
-        "test_input/32bpp-320x240.bmp",
-        "test_input/32bpp-888-optimalpalette-320x240.bmp",
-        "test_input/32bpp-101110-320x240.bmp",
-        "test_input/32bpp-optimalpalette-320x240.bmp",
-        "test_input/32bpp-topdown-320x240.bmp",
         "test_input/misleadingextension.jpg",
         "test_input/nofileextension",
         "test_input/spaces in  filename.bmp",
@@ -94,17 +94,18 @@ int main(int argc, char** argv)
         strcpy(outputFile, "");
         strcat(outputFile, "test_output/");
         strcat(outputFile,  strstr(images[i], "/") + 1);
-        //strcat(outputFile, "_output.bmp");
         
         printf("Image: %s\n", images[i]);
         
         // I/O Files
         FILE* input = fopen(images[i], "rb");
-        FILE* output = fopen(outputFile, "wb");
         
         // Load the pixel data from the bitmap
         s32 width, height;
         u08* data = bitmap_load(input, &width, &height);
+        if (data == NULL) continue;
+        
+        FILE* output = fopen(outputFile, "wb");
         
         // Save the bitmap to disk
         bitmap_save(output, width, height, data);
