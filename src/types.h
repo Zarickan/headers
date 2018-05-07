@@ -110,7 +110,7 @@ v2_div(v2* result, v2 left, v2 right) {
 // v2 functions
 static inline f32
 v2_magnitude(v2 vector) {
-    return 1.0 / sqrt(pow(vector.x, 2) + pow(vector.y, 2));
+    return (f32) (1.0 / sqrt(pow(vector.x, 2) + pow(vector.y, 2)));
 }
 static inline void
 v2_normalize(v2 vector) {
