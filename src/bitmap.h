@@ -646,6 +646,13 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     } info;
     bitmap_read_info(&header, &info.core, file);
     
+    // NOTE: For bitmaps with the size of the header incorrectly set
+    u32 actualSize = header.Offset - sizeof(BitmapHeader);
+    //info.v1.Size = actualSize;
+    printf("Actual size of info: %x\n", actualSize);
+    
+    display_bitmapinfo(&info.v1);
+    
     // NOTE: Core bitmaps have a different info header, so we handle them seperately
     u32 version = bitmap_version(&info.core);
     if (version == BITMAP_VCORE) {
@@ -667,6 +674,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     if (!*width || !*height)
         return result;
     
+    u08* data;
+    u08* pixelData;
+    
     if (info.v1.BitCount < 16) {
         info.v1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
@@ -677,8 +687,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         fread(colors, sizeof(RgbQuad), colorCount, file);
         
         s32 pixelMask = power(2, info.v1.BitCount) - 1;
-        u08* data = malloc(dataSize);
-        u08* pixelData = data;
+        data = malloc(dataSize);
+        pixelData = data;
+        fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
         // NOTE: Number of columns in the image (width in bytes)
@@ -718,60 +729,174 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             pixelData += rowOffset;
         }
         
-        // NOTE: Swap the rows for images that are top-down
-        // TODO: Optimization, can this be done while reading the data?
-        if (info.v1.Height < 0) {
-            u32* rawData = (u32*) result;
-            for (s32 row = 0; row < (*height) / 2; row++) {
-                for (s32 column = 0; column < (*width); column++) {
-                    u32 src = (*width) * row + column;
-                    u32 tgt = (*width) * ((*height) - row - 1) + column;
-                    
-                    rawData[src] ^= rawData[tgt];
-                    rawData[tgt] ^= rawData[src];
-                    rawData[src] ^= rawData[tgt];
-                }
-            }
-        }
-        
-        free(data);
         free(colors);
     }
-    // NOTE: 16bpp RGB images
-    else if (info.v1.Compression == BI_RGB && info.v1.BitCount == 16) {
-        assert(dataSize == info.v1.SizeImage);
+    // NOTE: BI_RGB without alpha
+    else if (info.v1.Compression == BI_RGB && version <= 2) {
+        s08 bitsPerColor = info.v1.BitCount / 3;
+        s08 unusedBits = info.v1.BitCount % 3;
+        u32 redMask   = (0xFFFFFFFF >> (32 - bitsPerColor)) << (2 * bitsPerColor);
+        u32 greenMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (1 * bitsPerColor);
+        u32 blueMask  = (0xFFFFFFFF >> (32 - bitsPerColor)) << (0 * bitsPerColor);
         
-        u16 redMask   = 0xF800;
-        u16 greenMask = 0x07C0;
-        u16 blueMask  = 0x003E;
-        u16 alphaMask = 0x0000;
-        u16 xMask     = 0x0001;
+        // NOTE: Skip the palette (in case image contains an optimized one)
+        fseek(file, info.v1.UsedColors * sizeof(RgbQuad), SEEK_CUR);
         
-        // TODO: Extract
+        data = malloc(dataSize);
+        pixelData = data;
+        fseek(file, header.Offset, SEEK_SET);
+        fread(pixelData, sizeof(u08), dataSize, file);
+        
+        s32 columns = (rowSize - rowOffset) / (info.v1.BitCount / 8);
+        for (s32 row = 0; row < ABS(info.v1.Height); row++) {
+            for (s32 column = 0; column < columns; column++) {
+                u32 value = 0x00;
+                
+                if (info.v1.BitCount == 16) {
+                    value = *((u16*) pixelData);
+                    pixelData += sizeof(u16);
+                }
+                else if (info.v1.BitCount == 32) {
+                    value = *((u32*) pixelData);
+                    pixelData += sizeof(u32);
+                }
+                else {
+                    for (s08 bytes = 0; bytes < info.v1.BitCount / 8; bytes++) {
+                        value |= *pixelData;
+                        
+                        if(bytes != info.v1.BitCount / 8 - 1)
+                            value <<= 8;
+                        
+                        pixelData++;
+                    }
+                }
+                
+                rgb->Red   = (value & redMask)   >> (2 * bitsPerColor);
+                rgb->Green = (value & greenMask) >> (1 * bitsPerColor);
+                rgb->Blue  = (value & blueMask)  >> (0 * bitsPerColor);
+                rgb->Alpha = 0xFF;
+                rgb++;
+            }
+            pixelData += rowOffset;
+        }
     }
-    // NOTE: 24bpp RGB images
-    else if (info.v1.Compression == BI_RGB && info.v1.BitCount == 24) {
+    // NOTE: BI_RGB with alpha
+    else if (info.v1.Compression == BI_RGB && version > 2) {
+        s08 bitsPerColor = info.v1.BitCount / 4;
+        s08 unusedBits = info.v1.BitCount % 4;
+        u32 redMask   = (0xFFFFFFFF >> (32 - bitsPerColor)) << (3 * bitsPerColor);
+        u32 greenMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (2 * bitsPerColor);
+        u32 blueMask  = (0xFFFFFFFF >> (32 - bitsPerColor)) << (1 * bitsPerColor);
+        u32 alphaMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (0 * bitsPerColor);
         
-        u32 redMask   = 0xFF0000;
-        u32 greenMask = 0x00FF00;
-        u32 blueMask  = 0x0000FF;
-        u32 alphaMask = 0x000000;
-        u32 xMask     = 0x000000;
+        data = malloc(dataSize);
+        pixelData = data;
+        fseek(file, header.Offset, SEEK_SET);
+        fread(pixelData, sizeof(u08), dataSize, file);
         
-        // TODO: Extract
+        s32 columns = (rowSize - rowOffset) / (info.v1.BitCount / 8);
+        for (s32 row = 0; row < ABS(info.v1.Height); row++) {
+            for (s32 column = 0; column < columns; column++) {
+                u32 value = 0x00;
+                
+                for (s08 bytes = 0; bytes < info.v1.BitCount / 8; bytes++) {
+                    value |= *pixelData;
+                    
+                    if(bytes != info.v1.BitCount / 8 - 1)
+                        value <<= 8;
+                    
+                    pixelData++;
+                }
+                
+                rgb->Red   = (value & redMask)   >> (3 * bitsPerColor);
+                rgb->Green = (value & greenMask) >> (2 * bitsPerColor);
+                rgb->Blue  = (value & blueMask)  >> (1 * bitsPerColor);
+                rgb->Alpha = (value & alphaMask) >> (0 * bitsPerColor);
+                rgb++;
+            }
+            pixelData += rowOffset;
+        }
     }
-    // NOTE: 32bpp RGB images
-    else if (info.v1.Compression == BI_RGB && info.v1.BitCount == 24) {
+    // NOTE: Bitfields without alpha
+    else if(info.v1.Compression == BI_BITFIELDS && version <= 2) {
+        data = malloc(dataSize);
+        pixelData = data;
+        fseek(file, header.Offset, SEEK_SET);
+        fread(pixelData, sizeof(u08), dataSize, file);
         
-        u32 redMask   = 0xFF000000;
-        u32 greenMask = 0x00FF0000;
-        u32 blueMask  = 0x0000FF00;
-        u32 alphaMask = 0x00000000;
-        u32 xMask     = 0x000000FF;
+        s32 columns = (rowSize - rowOffset) / (info.v1.BitCount / 8);
+        for (s32 row = 0; row < ABS(info.v1.Height); row++) {
+            for (s32 column = 0; column < columns; column++) {
+                u32 value = 0x00;
+                
+                for (s08 bytes = 0; bytes < info.v1.BitCount / 8; bytes++) {
+                    value |= *pixelData;
+                    
+                    if(bytes != info.v1.BitCount / 8 - 1)
+                        value <<= 8;
+                    
+                    pixelData++;
+                }
+                
+                rgb->Red   = (value & info.v2.RedMask)   >> (0);
+                rgb->Green = (value & info.v2.GreenMask) >> (0);
+                rgb->Blue  = (value & info.v2.BlueMask)  >> (0);
+                rgb->Alpha = 0xFF;
+                rgb++;
+            }
+            pixelData += rowOffset;
+        }
+    }
+    // NOTE: Bitfields with alpha
+    else if(info.v1.Compression == BI_BITFIELDS && version > 2) {
+        data = malloc(dataSize);
+        pixelData = data;
+        fseek(file, header.Offset, SEEK_SET);
+        fread(pixelData, sizeof(u08), dataSize, file);
         
-        // TODO: Extract
+        //u32 redShift = 
+        
+        s32 columns = (rowSize - rowOffset) / (info.v1.BitCount / 8);
+        for (s32 row = 0; row < ABS(info.v1.Height); row++) {
+            for (s32 column = 0; column < columns; column++) {
+                u32 value = 0x00;
+                
+                for (s08 bytes = 0; bytes < info.v1.BitCount / 8; bytes++) {
+                    value |= *pixelData;
+                    
+                    if(bytes != info.v1.BitCount / 8 - 1)
+                        value <<= 8;
+                    
+                    pixelData++;
+                }
+                
+                rgb->Red   = (value & info.v3.RedMask)   >> (0);
+                rgb->Green = (value & info.v3.GreenMask) >> (0);
+                rgb->Blue  = (value & info.v3.BlueMask)  >> (0);
+                rgb->Alpha = (value & info.v3.AlphaMask) >> (0);
+                rgb++;
+            }
+            pixelData += rowOffset;
+        }
     }
     
+    // NOTE: Swap the rows for images that are top-down
+    // TODO: Optimization, can this be done while reading the data?
+    if (info.v1.Height < 0) {
+        u32* rawData = (u32*) result;
+        for (s32 row = 0; row < (*height) / 2; row++) {
+            for (s32 column = 0; column < (*width); column++) {
+                u32 src = (*width) * row + column;
+                u32 tgt = (*width) * ((*height) - row - 1) + column;
+                
+                rawData[src] ^= rawData[tgt];
+                rawData[tgt] ^= rawData[src];
+                rawData[src] ^= rawData[tgt];
+            }
+        }
+    }
+    
+    free(data);
     return result;
 }
 
