@@ -709,7 +709,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         fread(colors, sizeof(RgbQuad), colorCount, file);
         
         s32 pixelMask = power(2, info.v1.BitCount) - 1;
-        fseek(file, header.Offset, SEEK_SET);
+        
+        if (header.Offset)
+            fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
         // NOTE: Number of columns in the image (width in bytes)
@@ -753,7 +755,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     }
     // NOTE: BI_RGB
     else if (info.v1.Compression == BI_RGB) {
-        fseek(file, header.Offset, SEEK_SET);
+        if (header.Offset)
+            fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
         s32 columns = (rowSize - rowOffset) / (info.v1.BitCount / 8);
@@ -804,7 +807,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         if (version == 1 && BI_ALPHABITFIELDS)
             fread(&info.v3.AlphaMask, sizeof(u32), 1, file);
         
-        fseek(file, header.Offset, SEEK_SET);
+        if (header.Offset)
+            fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
         s32 redShift, greenShift, blueShift, alphaShift;
