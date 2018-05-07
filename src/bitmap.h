@@ -548,7 +548,7 @@ log_bitmapinfo(BitmapInfoHeader* header, FILE* file) {
     fprintf(file, "    ImportantColors: 0x%x\n", header->ImportantColors);
 }
 
-u32
+static inline u32
 power(u32 base, u32 power) {
     if (power == 0) return 1;
     
@@ -557,6 +557,14 @@ power(u32 base, u32 power) {
         result *= base;
     
     return result;
+}
+
+static inline u32
+setbits(u32 number)
+{
+    number -= (number >> 1) & 0x55555555;
+    number = (number & 0x33333333) + ((number >> 2) & 0x33333333);
+    return (((number + (number >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
 }
 
 static inline u08*
@@ -643,6 +651,7 @@ bitmap_load_core(FILE* file, s32* width, s32* height) {
 }
 
 #define MAP(v, wordSize) (u08) ((v) / (pow(2, (wordSize)) - 1) * 255)
+#define LOG(n) (u08) (log2((n)))
 
 static inline u08*
 bitmap_load(FILE* file, s32* width, s32* height) {
@@ -657,12 +666,11 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     } info;
     bitmap_read_info(&header, &info.core, file);
     
-    if (info.v1.Compression == BI_BITFIELDS)
-        return NULL;
-    
     // NOTE: For bitmaps with the size of the header incorrectly set
     u32 actualSize = header.Offset - sizeof(BitmapHeader);
     //info.v1.Size = actualSize;
+    
+    // TODO: Temporary
     printf("Actual size of info: %x\n", actualSize);
     
     display_bitmapinfo(&info.v1);
@@ -688,8 +696,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     if (!*width || !*height)
         return result;
     
-    u08 *data = NULL;
-    u08* pixelData = NULL;
+    u08* data = malloc(dataSize);
+    u08* pixelData = data;
     
     if (info.v1.BitCount < 16) {
         info.v1.Planes = 1; // NOTE: Planes should always be 1
@@ -701,8 +709,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         fread(colors, sizeof(RgbQuad), colorCount, file);
         
         s32 pixelMask = power(2, info.v1.BitCount) - 1;
-        data = malloc(dataSize);
-        pixelData = data;
         fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
@@ -747,15 +753,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     }
     // NOTE: BI_RGB
     else if (info.v1.Compression == BI_RGB) {
-        s32 bitsPerColor = min(info.v1.BitCount / 3, 8);
-        s32 bitsUnused = info.v1.BitCount - bitsPerColor * 3;
-        
-        u32 redMask   = (0xFFFFFFFF >> (32 - bitsPerColor)) << (0 * bitsPerColor + bitsUnused);
-        u32 greenMask = (0xFFFFFFFF >> (32 - bitsPerColor)) << (1 * bitsPerColor + bitsUnused);
-        u32 blueMask  = (0xFFFFFFFF >> (32 - bitsPerColor)) << (2 * bitsPerColor + bitsUnused);
-        
-        data = malloc(dataSize);
-        pixelData = data;
         fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
@@ -796,113 +793,57 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             pixelData += rowOffset;
         }
     }
-    // NOTE: Bitfields without alpha
-    else if(info.v1.Compression == BI_BITFIELDS && version <= 2) {
-        data = malloc(dataSize);
-        pixelData = data;
+    // NOTE: BitFields
+    else if (info.v1.Compression == BI_BITFIELDS) {
+        s32 usesAlpha = !(version <= 2 && info.v1.Compression != BI_ALPHABITFIELDS);
+        
+        // NOTE: While v1 bitmaps have no fields for RGB bitmasks they come right after the info header,
+        // for convinience we read them into the fields of the v2 header.
+        if (version == 1)
+            fread(&info.v2.RedMask, sizeof(u32), 3, file);
+        if (version == 1 && BI_ALPHABITFIELDS)
+            fread(&info.v3.AlphaMask, sizeof(u32), 1, file);
+        
         fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
-        s32 redShift;
-        s32 greenShift;
-        s32 blueShift;
-        for (redShift = 0; redShift < 32 && !(info.v2.RedMask & power(2, redShift)); redShift++)
-            ;
-        for (greenShift = 0; greenShift < 32 && !(info.v2.GreenMask & power(2, greenShift)); greenShift++)
-            ;
-        for (blueShift = 0; blueShift < 32 && !(info.v2.BlueMask & power(2, blueShift)); blueShift++)
-            ;
+        s32 redShift, greenShift, blueShift, alphaShift;
+        for (redShift = 0; redShift < 32 && !(info.v2.RedMask & power(2, redShift)); redShift++);
+        for (greenShift = 0; greenShift < 32 && !(info.v2.GreenMask & power(2, greenShift)); greenShift++);
+        for (blueShift = 0; blueShift < 32 && !(info.v2.BlueMask & power(2, blueShift)); blueShift++);
         
+        s32 redBits = setbits(info.v2.RedMask);
+        s32 greenBits = setbits(info.v2.GreenMask);
+        s32 blueBits = setbits(info.v2.BlueMask);
+        s32 alphaBits;
+        
+        // NOTE: These are only used if alpha is used
+        if (usesAlpha) {
+            for (alphaShift = 0; alphaShift < 32 && !(info.v3.AlphaMask & power(2, alphaShift)); alphaShift++);
+            alphaBits = setbits(info.v3.AlphaMask);
+        }
+        
+        // NOTE: Without alpha
         s32 columns = (rowSize - rowOffset) / (info.v1.BitCount / 8);
         for (s32 row = 0; row < ABS(info.v1.Height); row++) {
             for (s32 column = 0; column < columns; column++) {
                 u32 value = 0x00;
                 
-                if (info.v1.BitCount == 16) {
-                    value = *((u16*) pixelData);
-                    pixelData += sizeof(u16);
-                }
-                else if (info.v1.BitCount == 32) {
-                    value = *((u32*) pixelData);
-                    pixelData += sizeof(u32);
-                }
-                else {
-                    for (s08 bytes = 0; bytes < info.v1.BitCount / 8; bytes++) {
-                        value |= *pixelData;
-                        
-                        if(bytes != info.v1.BitCount / 8 - 1)
-                            value <<= 8;
-                        
-                        pixelData++;
-                    }
+                u08 totalBytes = info.v1.BitCount / 8;
+                for (s08 bytes = 0; bytes < totalBytes; bytes++) {
+                    value |= ((*pixelData) << bytes * 8);
+                    pixelData++;
                 }
                 
                 u32 red = (value & info.v2.RedMask) >> redShift;
                 u32 green = (value & info.v2.GreenMask) >> greenShift;
                 u32 blue = (value & info.v2.BlueMask) >> blueShift;
+                u32 alpha = !usesAlpha ? 0 : ((value & info.v3.AlphaMask) >> alphaShift);
                 
-                rgb->Red   = (u08) red;
-                rgb->Green = (u08) green;
-                rgb->Blue  = (u08) blue;
-                rgb->Alpha = 0xFF;
-                rgb++;
-            }
-            pixelData += rowOffset;
-        }
-    }
-    // NOTE: Bitfields with alpha
-    else if(info.v1.Compression == BI_BITFIELDS && version > 2) {
-        data = malloc(dataSize);
-        pixelData = data;
-        fseek(file, header.Offset, SEEK_SET);
-        fread(pixelData, sizeof(u08), dataSize, file);
-        
-        s32 redShift;
-        s32 greenShift;
-        s32 blueShift;
-        s32 alphaShift;
-        for (redShift = 0; redShift < 32 && !(info.v3.RedMask & power(2, redShift)); redShift++)
-            ;
-        for (greenShift = 0; greenShift < 32 && !(info.v3.GreenMask & power(2, greenShift)); greenShift++)
-            ;
-        for (blueShift = 0; blueShift < 32 && !(info.v3.BlueMask & power(2, blueShift)); blueShift++)
-            ;
-        for (alphaShift = 0; alphaShift < 32 && !(info.v3.AlphaMask & power(2, alphaShift)); alphaShift++)
-            ;
-        
-        s32 columns = (rowSize - rowOffset) / (info.v1.BitCount / 8);
-        for (s32 row = 0; row < ABS(info.v1.Height); row++) {
-            for (s32 column = 0; column < columns; column++) {
-                u32 value = 0x00;
-                
-                if (info.v1.BitCount == 16) {
-                    value = *((u16*) pixelData);
-                    pixelData += sizeof(u16);
-                }
-                else if (info.v1.BitCount == 32) {
-                    value = *((u32*) pixelData);
-                    pixelData += sizeof(u32);
-                }
-                else {
-                    for (s08 bytes = 0; bytes < info.v1.BitCount / 8; bytes++) {
-                        value |= *pixelData;
-                        
-                        if(bytes != info.v1.BitCount / 8 - 1)
-                            value <<= 8;
-                        
-                        pixelData++;
-                    }
-                }
-                
-                u32 red = (value & info.v3.RedMask) >> redShift;
-                u32 green = (value & info.v3.GreenMask) >> greenShift;
-                u32 blue = (value & info.v3.BlueMask) >> blueShift;
-                u32 alpha = (value & info.v3.AlphaMask) >> alphaShift;
-                
-                rgb->Red   = (u08) red;
-                rgb->Green = (u08) green;
-                rgb->Blue  = (u08) blue;
-                rgb->Alpha = (u08) alpha;
+                rgb->Red   = MAP(red, redBits);
+                rgb->Green = MAP(green, greenBits);
+                rgb->Blue  = MAP(blue, blueBits);
+                rgb->Alpha = usesAlpha ? MAP(alpha, alphaBits): 0xFF;
                 rgb++;
             }
             pixelData += rowOffset;
