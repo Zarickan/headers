@@ -681,8 +681,17 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         return bitmap_load_core(file, width, height);
     }
     
+    // NOTE: Assuming negative width is an error, we take the absolute width
+    if (info.v1.Width < 0)
+        info.v1.Width = ABS(info.v1.Width);
+    
     *width = info.v1.Width;
     *height = ABS(info.v1.Height);
+    
+    // NOTE: Bad bitcount, calculate it from Width and SizeImage according to formula
+    if (!(info.v1.BitCount ==  1 || info.v1.BitCount ==  2 || info.v1.BitCount ==  4 || info.v1.BitCount ==  8 || info.v1.BitCount == 16 || info.v1.BitCount == 24 || info.v1.BitCount == 32)) {
+        info.v1.BitCount = (32 * ((info.v1.SizeImage / (info.v1.Height * 4)) - (31 / 32))) / info.v1.Width;
+    }
     
     // NOTE: Rows are fit to a DWORD (4 byte) boundary (32 is BPP of output, 31 is bpp - 1 bit)
     u32 rowSize = (u32) (floor((info.v1.BitCount * info.v1.Width + 31.0) / 32.0) * 4);
