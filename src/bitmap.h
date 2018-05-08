@@ -816,7 +816,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         // for convinience we read them into the fields of the v2 header.
         if (version == 1)
             fread(&info.v2.RedMask, sizeof(u32), 3, file);
-        if (version == 1 && BI_ALPHABITFIELDS)
+        if (version == 1 && info.v1.Compression == BI_ALPHABITFIELDS)
             fread(&info.v3.AlphaMask, sizeof(u32), 1, file);
         
         if (header.Offset)
