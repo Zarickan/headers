@@ -522,40 +522,110 @@ display_palette(BitmapInfoHeader* header) {
 
 static inline void
 display_bitmapinfo(BitmapInfoHeader* header) {
+    BitmapInfo info = { .V1 = header };
+    s32 version = bitmap_get_version((BitmapCoreHeader*) info.Core);
+    u64 colorCount = bitmap_get_colorcount((BitmapCoreHeader*) info.V1);
+    
     printf("  BitmapInfoHeader:\n");
-    printf("  Version:        %i\n", bitmap_get_version((BitmapCoreHeader*) header));
-    printf("  Color count:    %llu\n", bitmap_get_colorcount((BitmapCoreHeader*) header));
-    printf("  Uses palette:   %s\n", header->UsedColors > 0 ? "true" : "false");
-    printf("    Size:            0x%x\n", header->Size);
-    printf("    Width:           0x%x\n", header->Width);
-    printf("    Height:          0x%x\n", header->Height);
-    printf("    Planes:          0x%x\n", header->Planes);
-    printf("    BitCount:        0x%x\n", header->BitCount);
-    printf("    Compression:     0x%x\n", header->Compression);
-    printf("    SizeImage:       0x%x\n", header->SizeImage);
-    printf("    XPelsPerMeter:   0x%x\n", header->XPelsPerMeter);
-    printf("    YPelsPerMeter:   0x%x\n", header->YPelsPerMeter);
-    printf("    UsedColors:      0x%x\n", header->UsedColors);
-    printf("    ImportantColors: 0x%x\n", header->ImportantColors);
+    printf("  Version:        %i\n", version);
+    printf("  Color count:    %llu\n", colorCount);
+    printf("  Uses palette:   %s\n", info.V1->UsedColors > 0 ? "true" : "false");
+    printf("    Size:            0x%x\n", info.V1->Size);
+    printf("    Width:           0x%x\n", info.V1->Width);
+    printf("    Height:          0x%x\n", info.V1->Height);
+    printf("    Planes:          0x%2x\n", info.V1->Planes);
+    printf("    BitCount:        0x%2x\n", info.V1->BitCount);
+    printf("    Compression:     0x%2x\n", info.V1->Compression);
+    printf("    SizeImage:       0x%x\n", info.V1->SizeImage);
+    printf("    XPelsPerMeter:   0x%x\n", info.V1->XPelsPerMeter);
+    printf("    YPelsPerMeter:   0x%x\n", info.V1->YPelsPerMeter);
+    printf("    UsedColors:      0x%2x\n", info.V1->UsedColors);
+    printf("    ImportantColors: 0x%2x\n", info.V1->ImportantColors);
+    
+    if (version >= BITMAP_V2) {
+        printf("    RedMask:         0x%8x\n", info.V2->RedMask);
+        printf("    GreenMask:       0x%8x\n", info.V2->GreenMask);
+        printf("    BlueMask:        0x%8x\n", info.V2->BlueMask);
+    }
+    if (version >= BITMAP_V3) {
+        printf("    AlphaMask:       0x%8x\n", info.V3->AlphaMask);
+    }
+    if (version >= BITMAP_V4) {
+        printf("    ColorSpaceType:  0x%8x\n", info.V4->ColorSpaceType);
+        printf("    CIE Endpoinst:\n");
+        printf("      RedEndPointX:    %i\n", info.V4->Endpoints.Red.X);
+        printf("      RedEndPointY:    %i\n", info.V4->Endpoints.Red.Y);
+        printf("      RedEndPointZ:    %i\n", info.V4->Endpoints.Red.Z);
+        printf("      GreenEndPointX:  %i\n", info.V4->Endpoints.Green.X);
+        printf("      GreenEndPointY:  %i\n", info.V4->Endpoints.Green.Y);
+        printf("      GreenEndPointZ:  %i\n", info.V4->Endpoints.Green.Z);
+        printf("      BlueEndPointX:   %i\n", info.V4->Endpoints.Blue.X);
+        printf("      BlueEndPointY:   %i\n", info.V4->Endpoints.Blue.Y);
+        printf("      BlueEndPointZ:   %i\n", info.V4->Endpoints.Blue.Z);
+        printf("    GammaRed:        0x%8x\n", info.V4->GammaRed);
+        printf("    GammaBlue:       0x%8x\n", info.V4->GammaBlue);
+        printf("    GammaGreen:      0x%8x\n", info.V4->GammaGreen);
+    }
+    if (version >= BITMAP_V5) {
+        printf("    Intent:          0x%8x\n", info.V5->Intent);
+        printf("    ProfileData:     0x%8x\n", info.V5->ProfileData);
+        printf("    ProfileSize:     0x%8x\n", info.V5->ProfileSize);
+        printf("    Reserved:        0x%8x\n", info.V5->Reserved);
+    }
 }
 
 static inline void
 log_bitmapinfo(BitmapInfoHeader* header, FILE* file) {
+    BitmapInfo info = { .V1 = header };
+    s32 version = bitmap_get_version((BitmapCoreHeader*) info.Core);
+    u64 colorCount = bitmap_get_colorcount((BitmapCoreHeader*) info.V1);
+    
     fprintf(file, "  BitmapInfoHeader:\n");
-    fprintf(file, "  Version:        %i\n", bitmap_get_version((BitmapCoreHeader*) header));
-    fprintf(file, "  Color count:    %llu\n", bitmap_get_colorcount((BitmapCoreHeader*) header));
-    fprintf(file, "  Uses palette:   %s\n", header->UsedColors > 0 ? "true" : "false");
-    fprintf(file, "    Size:            0x%x\n", header->Size);
-    fprintf(file, "    Width:           0x%x\n", header->Width);
-    fprintf(file, "    Height:          0x%x\n", header->Height);
-    fprintf(file, "    Planes:          0x%x\n", header->Planes);
-    fprintf(file, "    BitCount:        0x%x\n", header->BitCount);
-    fprintf(file, "    Compression:     0x%x\n", header->Compression);
-    fprintf(file, "    SizeImage:       0x%x\n", header->SizeImage);
-    fprintf(file, "    XPelsPerMeter:   0x%x\n", header->XPelsPerMeter);
-    fprintf(file, "    YPelsPerMeter:   0x%x\n", header->YPelsPerMeter);
-    fprintf(file, "    UsedColors:      0x%x\n", header->UsedColors);
-    fprintf(file, "    ImportantColors: 0x%x\n", header->ImportantColors);
+    fprintf(file, "  Version:        %i\n", version);
+    fprintf(file, "  Color count:    %llu\n", colorCount);
+    fprintf(file, "  Uses palette:   %s\n", info.V1->UsedColors > 0 ? "true" : "false");
+    fprintf(file, "    Size:            0x%x\n", info.V1->Size);
+    fprintf(file, "    Width:           0x%x\n", info.V1->Width);
+    fprintf(file, "    Height:          0x%x\n", info.V1->Height);
+    fprintf(file, "    Planes:          0x%2x\n", info.V1->Planes);
+    fprintf(file, "    BitCount:        0x%2x\n", info.V1->BitCount);
+    fprintf(file, "    Compression:     0x%2x\n", info.V1->Compression);
+    fprintf(file, "    SizeImage:       0x%x\n", info.V1->SizeImage);
+    fprintf(file, "    XPelsPerMeter:   0x%x\n", info.V1->XPelsPerMeter);
+    fprintf(file, "    YPelsPerMeter:   0x%x\n", info.V1->YPelsPerMeter);
+    fprintf(file, "    UsedColors:      0x%2x\n", info.V1->UsedColors);
+    fprintf(file, "    ImportantColors: 0x%2x\n", info.V1->ImportantColors);
+    
+    if (version >= BITMAP_V2) {
+        fprintf(file, "    RedMask:         0x%8x\n", info.V2->RedMask);
+        fprintf(file, "    GreenMask:       0x%8x\n", info.V2->GreenMask);
+        fprintf(file, "    BlueMask:        0x%8x\n", info.V2->BlueMask);
+    }
+    if (version >= BITMAP_V3) {
+        fprintf(file, "    AlphaMask:       0x%8x\n", info.V3->AlphaMask);
+    }
+    if (version >= BITMAP_V4) {
+        fprintf(file, "    ColorSpaceType:  0x%8x\n", info.V4->ColorSpaceType);
+        fprintf(file, "    CIE Endpoinst:\n");
+        fprintf(file, "      RedEndPointX:    %i\n", info.V4->Endpoints.Red.X);
+        fprintf(file, "      RedEndPointY:    %i\n", info.V4->Endpoints.Red.Y);
+        fprintf(file, "      RedEndPointZ:    %i\n", info.V4->Endpoints.Red.Z);
+        fprintf(file, "      GreenEndPointX:  %i\n", info.V4->Endpoints.Green.X);
+        fprintf(file, "      GreenEndPointY:  %i\n", info.V4->Endpoints.Green.Y);
+        fprintf(file, "      GreenEndPointZ:  %i\n", info.V4->Endpoints.Green.Z);
+        fprintf(file, "      BlueEndPointX:   %i\n", info.V4->Endpoints.Blue.X);
+        fprintf(file, "      BlueEndPointY:   %i\n", info.V4->Endpoints.Blue.Y);
+        fprintf(file, "      BlueEndPointZ:   %i\n", info.V4->Endpoints.Blue.Z);
+        fprintf(file, "    GammaRed:        0x%8x\n", info.V4->GammaRed);
+        fprintf(file, "    GammaBlue:       0x%8x\n", info.V4->GammaBlue);
+        fprintf(file, "    GammaGreen:      0x%8x\n", info.V4->GammaGreen);
+    }
+    if (version >= BITMAP_V5) {
+        fprintf(file, "    Intent:          0x%8x\n", info.V5->Intent);
+        fprintf(file, "    ProfileData:     0x%8x\n", info.V5->ProfileData);
+        fprintf(file, "    ProfileSize:     0x%8x\n", info.V5->ProfileSize);
+        fprintf(file, "    Reserved:        0x%8x\n", info.V5->Reserved);
+    }
 }
 
 static inline u32
