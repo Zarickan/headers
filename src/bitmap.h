@@ -409,7 +409,7 @@ bitmap_create_v4(Bitmap* bitmap, s32 width, s32 height) {
     info->GreenMask = 0x0000FF00;
     info->BlueMask  = 0x000000FF;
     info->AlphaMask = 0xFF000000;
-    info->ColorSpaceType = 0x206E6957;
+    info->ColorSpaceType = 0x73524742;
     memset(&info->Endpoints, 0, sizeof(CIETriple)); // NOTE: Ignored for the use ColorSpaceType (see specification)
     info->GammaRed   = 0;
     info->GammaGreen = 0;
@@ -447,12 +447,12 @@ bitmap_create_v5(Bitmap* bitmap, s32 width, s32 height) {
     info->GreenMask = 0x0000FF00;
     info->BlueMask  = 0x000000FF;
     info->AlphaMask = 0xFF000000;
-    info->ColorSpaceType = 0x206E6957;
+    info->ColorSpaceType = 0x73524742;
     memset(&info->Endpoints, 0, sizeof(CIETriple)); // NOTE: Ignored for the use ColorSpaceType (see specification)
     info->GammaRed   = 0;
     info->GammaGreen = 0;
     info->GammaBlue  = 0;
-    info->Intent = 0;
+    info->Intent = 4;
     info->ProfileData = 0;
     info->ProfileSize = 0;
     info->Reserved = 0;
