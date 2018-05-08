@@ -104,6 +104,7 @@ typedef struct BitmapInfoHeader {
     u32 UsedColors;
     u32 ImportantColors;
 } BitmapInfoHeader;
+typedef BitmapInfoHeader BitmapInfoV1Header;
 
 typedef struct BitmapInfoV2Header {
     u32 Size;
@@ -212,9 +213,18 @@ typedef struct BitmapInfoV5Header {
 
 #pragma pack(pop)
 
+typedef union BitmapInfo {
+    BitmapCoreHeader* Core;
+    BitmapInfoV1Header* V1;
+    BitmapInfoV2Header* V2;
+    BitmapInfoV3Header* V3;
+    BitmapInfoV4Header* V4;
+    BitmapInfoV5Header* V5;
+} BitmapInfo;
+
 typedef struct Bitmap {
-    BitmapHeader      Header;
-    BitmapInfoHeader* Info;
+    BitmapHeader Header;
+    BitmapInfo Info;
     
     union Data {
         u08*       Bytes;
@@ -285,7 +295,7 @@ bitmap_create_core(Bitmap* bitmap, s16 width, s16 height) {
     
     u32 size = width * height * sizeof(RgbTriple);
     
-    bitmap->Info = (BitmapInfoHeader*) info;
+    bitmap->Info.Core = info;
     
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
@@ -311,7 +321,7 @@ bitmap_create_v1(Bitmap* bitmap, s32 width, s32 height) {
     info->UsedColors = 0x00;
     info->ImportantColors = 0x00;
     
-    bitmap->Info = info;
+    bitmap->Info.V1 = info;
     
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
@@ -340,7 +350,7 @@ bitmap_create_v2(Bitmap* bitmap, s32 width, s32 height) {
     info->GreenMask = 0x0000FF00;
     info->BlueMask  = 0x000000FF;
     
-    bitmap->Info = (BitmapInfoHeader*) info;
+    bitmap->Info.V2 = info;
     
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
@@ -370,7 +380,7 @@ bitmap_create_v3(Bitmap* bitmap, s32 width, s32 height) {
     info->BlueMask  = 0x000000FF;
     info->AlphaMask = 0xFF000000;
     
-    bitmap->Info = (BitmapInfoHeader*) info;
+    bitmap->Info.V3 = info;
     
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
@@ -405,7 +415,7 @@ bitmap_create_v4(Bitmap* bitmap, s32 width, s32 height) {
     info->GammaGreen = 0;
     info->GammaBlue  = 0;
     
-    bitmap->Info = (BitmapInfoHeader*) info;
+    bitmap->Info.V4 = info;
     
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
@@ -447,7 +457,7 @@ bitmap_create_v5(Bitmap* bitmap, s32 width, s32 height) {
     info->ProfileSize = 0;
     info->Reserved = 0;
     
-    bitmap->Info = (BitmapInfoHeader*) info;
+    bitmap->Info.V5 = info;
     
     bitmap->Header.Id = 0x4D42;
     bitmap->Header.Reserved[0] = 0;
@@ -468,31 +478,31 @@ create_bitmap(Bitmap* bitmap, BitmapHeader* header, BitmapInfoHeader* bitmapInfo
     header->Offset = sizeof(BitmapHeader) + bitmapInfo->Size;
     
     bitmap->Header = *header;
-    bitmap->Info = bitmapInfo;
+    bitmap->Info.V1 = bitmapInfo;
     bitmap->Data.Bytes = data;
 }
 
 static inline void
 bitmap_free(Bitmap* bitmap) {
-    free(bitmap->Info);
+    free(bitmap->Info.Core);
     free(bitmap->Data.Bytes);
     free(bitmap);
 }
 
 static inline void
 write_bitmap_to_file(Bitmap* bitmap, FILE* file) {
-    assert(bitmap->Info->Size != 0);
+    assert(bitmap->Info.V1->Size != 0);
     fwrite(&bitmap->Header, sizeof(BitmapHeader), 1, file);
-    fwrite(bitmap->Info, bitmap->Info->Size, 1, file);
+    fwrite(bitmap->Info.V1, bitmap->Info.V1->Size, 1, file);
     
-    if (bitmap_version(bitmap->Info) == BITMAP_VCORE) {
-        u32 size = (u32) (bitmap->Info->Width * bitmap->Info->Height * (bitmap->Info->BitCount / 8));
+    if (bitmap_version(bitmap->Info.V1) == BITMAP_VCORE) {
+        u32 size = (u32) (bitmap->Info.V1->Width * bitmap->Info.V1->Height * (bitmap->Info.V1->BitCount / 8));
         
         fwrite(bitmap->Data.Bytes, sizeof(u08), size, file);
         return;
     }
     
-    fwrite(bitmap->Data.Bytes, sizeof(u08), bitmap->Info->SizeImage, file);
+    fwrite(bitmap->Data.Bytes, sizeof(u08), bitmap->Info.V1->SizeImage, file);
 }
 
 static inline void
@@ -666,13 +676,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     } info;
     bitmap_read_info(&header, &info.core, file);
     
-    // NOTE: For bitmaps with the size of the header incorrectly set
-    u32 actualSize = header.Offset - sizeof(BitmapHeader);
-    //info.v1.Size = actualSize;
-    
     // TODO: Temporary
-    printf("Actual size of info: %x\n", actualSize);
-    
     display_bitmapinfo(&info.v1);
     
     // NOTE: Core bitmaps have a different info header, so we handle them seperately
@@ -762,7 +766,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         
         free(colors);
     }
-    // NOTE: BI_RGB
+    // NOTE: BI_RGB0
     else if (info.v1.Compression == BI_RGB) {
         if (header.Offset)
             fseek(file, header.Offset, SEEK_SET);
@@ -891,13 +895,13 @@ bitmap_save(FILE* file, s32 width, s32 height, const u08* data) {
     Bitmap bitmap;
     bitmap_create_v5(&bitmap, width, height);
     
-    s32 h = bitmap.Info->Height == 0 ? 1 : bitmap.Info->Height;
-    u32 rowSize = (bitmap.Info->SizeImage / sizeof(RgbQuad)) / h;
-    u32 rowOffset = rowSize - bitmap.Info->Width;
+    s32 h = bitmap.Info.V1->Height == 0 ? 1 : bitmap.Info.V1->Height;
+    u32 rowSize = (bitmap.Info.V1->SizeImage / sizeof(RgbQuad)) / h;
+    u32 rowOffset = rowSize - bitmap.Info.V1->Width;
     
     u08* output = bitmap.Data.Bytes;
-    for (s32 row = 0; row < bitmap.Info->Height; row++) {
-        for (s32 x = 0; x < bitmap.Info->Width; x++) {
+    for (s32 row = 0; row < bitmap.Info.V1->Height; row++) {
+        for (s32 x = 0; x < bitmap.Info.V1->Width; x++) {
             RgbQuad* rgb = (RgbQuad*) output;
             *rgb = *((RgbQuad*) data);
             
@@ -908,7 +912,7 @@ bitmap_save(FILE* file, s32 width, s32 height, const u08* data) {
     }
     
     write_bitmap_to_file(&bitmap, file);
-    free(bitmap.Info);
+    free(bitmap.Info.Core);
     free(bitmap.Data.Bytes);
 }
 
