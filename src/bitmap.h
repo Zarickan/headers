@@ -648,6 +648,34 @@ setbits(u32 number)
 }
 
 static inline u08*
+rle4_decompress(u08* data, u32 dataSize, u32 resultSize) {
+    return NULL;
+}
+
+static inline u08*
+rle8_decompress(u08* data, u32 dataSize, u32 resultSize) {
+    u08* buffer = malloc(resultSize);
+    u08* result = buffer;
+    
+    for (u32 pos = 0; pos < dataSize; pos++) {
+        u08 length = buffer[pos];
+        
+        // NOTE: Control
+        if (length == 0x00) {
+            
+            
+            continue;
+        }
+        
+        for (u08 i = 0; i < length; i++) {
+            *result++ = buffer[++pos];
+        }
+    }
+    
+    return buffer;
+}
+
+static inline u08*
 bitmap_load_core(FILE* file, s32* width, s32* height) {
     BitmapHeader header;
     BitmapCoreHeader info;
@@ -772,17 +800,21 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     u32 rowOffset = (u32) (rowSize - ceil(info.v1.Width * info.v1.BitCount / 8.0));
     u32 dataSize = rowSize * ABS(info.v1.Height);
     
+    // TODO: Calculate size?
+    if (info.v1.Compression == BI_RLE4 || info.v1.Compression == BI_RLE8)
+        dataSize = info.v1.SizeImage;
+    
     // NOTE: If row is negative image is in the oposite direction, so reverse this point
     u08* result = malloc(info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
     RgbQuad* rgb = (RgbQuad*) result;
     
     if (!*width || !*height)
         return result;
-    
+    ;
     u08* data = malloc(dataSize);
     u08* pixelData = data;
     
-    if (info.v1.BitCount < 16) {
+    if (info.v1.BitCount < 16 && info.v1.Compression == BI_RGB) {
         info.v1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
         u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
@@ -836,7 +868,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         
         free(colors);
     }
-    // NOTE: BI_RGB0
+    // NOTE: BI_RGB
     else if (info.v1.Compression == BI_RGB) {
         if (header.Offset)
             fseek(file, header.Offset, SEEK_SET);
@@ -938,18 +970,53 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             pixelData += rowOffset;
         }
     }
-    
-    // NOTE: Swap the rows for images that are top-down
-    if (info.v1.Height < 0) {
-        u32* rawData = (u32*) result;
-        for (s32 row = 0; row < (*height) / 2; row++) {
-            for (s32 column = 0; column < (*width); column++) {
-                s32 src = (*width) * row + column;
-                s32 tgt = (*width) * ((*height) - row - 1) + column;
+    // NOTE: RLE4
+    else if (info.v1.Compression == BI_RLE4) {
+    }
+    // NOTE: RLE8
+    else if (info.v1.Compression == BI_RLE8) {
+        info.v1.Planes = 1; // NOTE: Planes should always be 1
+        u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
+        u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
+        colorCount = colorCount == 0 ? maxColorCount : colorCount;
+        
+        RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
+        fread(colors, sizeof(RgbQuad), colorCount, file);
+        
+        if (header.Offset)
+            fseek(file, header.Offset, SEEK_SET);
+        fread(pixelData, sizeof(u08), dataSize, file);
+        
+        for (u32 pos = 0; pos < dataSize; pos++) {
+            u08 length = *pixelData;
+            u08 value = *++pixelData;
+            
+            // NOTE: Control
+            if (length == 0x00 && value == 0x01) {
+                printf("End of bitmap\n");
+                pos = dataSize;
+                break;
+            }
+            else if (length == 0x00) {
+                switch (value) {
+                    case 0x00:
+                    printf("End of line\n");
+                    break;
+                    case 0x02:
+                    printf("Delta\n");
+                    break;
+                }
                 
-                rawData[src] ^= rawData[tgt];
-                rawData[tgt] ^= rawData[src];
-                rawData[src] ^= rawData[tgt];
+                continue;
+            }
+            
+            for (u08 i = 0; i < length; i++) {
+                RgbQuad color = *(colors + value);
+                /*
+                *rgb = color;
+                rgb->Alpha = (u08) (0xFF - rgb->Alpha);
+                rgb++;
+                */
             }
         }
     }
