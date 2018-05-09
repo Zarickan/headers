@@ -987,36 +987,56 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
+        s08 absolute = 0;
         for (u32 pos = 0; pos < dataSize; pos++) {
             u08 length = *pixelData;
-            u08 value = *++pixelData;
+            pixelData++;
+            u08 value = *pixelData;
+            pixelData++;
             
             // NOTE: Control
-            if (length == 0x00 && value == 0x01) {
-                printf("End of bitmap\n");
-                pos = dataSize;
-                break;
-            }
-            else if (length == 0x00) {
+            if (length == 0x00) {
                 switch (value) {
-                    case 0x00:
-                    printf("End of line\n");
-                    break;
-                    case 0x02:
+                    case 0x00: // End of line
+                    continue;
+                    
+                    case 0x01: // End of file
+                    pos = dataSize;
+                    continue;
+                    
+                    case 0x02: // Delta
                     printf("Delta\n");
+                    pixelData += 2;
+                    continue;
+                    
+                    default: // Absolute marker
+                    absolute = 1;
                     break;
                 }
-                
-                continue;
             }
             
-            for (u08 i = 0; i < length; i++) {
-                RgbQuad color = *(colors + value);
-                /*
-                *rgb = color;
-                rgb->Alpha = (u08) (0xFF - rgb->Alpha);
-                rgb++;
-                */
+            if(!absolute) {
+                for (u08 i = 0; i < length; i++) {
+                    RgbQuad color = *(colors + value);
+                    
+                    *rgb = color;
+                    rgb->Alpha = (u08) (0xFF - rgb->Alpha);
+                    rgb++;
+                }
+            }
+            else {
+                for (u08 i = 0; i < value; i++) {
+                    RgbQuad color = *(colors + *pixelData);
+                    pixelData++;
+                    
+                    *rgb = color;
+                    rgb->Alpha = (u08) (0xFF - rgb->Alpha);
+                    rgb++;
+                }
+                
+                u32 rowSize = (u32) (floor((8 * value + 31.0) / 32.0) * 4);
+                u32 rowOffset = (u32) (rowSize - value);
+                pixelData += rowOffset;
             }
         }
     }

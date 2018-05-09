@@ -7,6 +7,11 @@ int main(int argc, char** argv)
 {
     // Input files
     char* images[] = {
+        "test_input/rle8-encoded-320x240.bmp",
+        "test_input/rle8-absolute-320x240.bmp",
+        "test_input/rle8-blank-160x120.bmp",
+        "test_input/rle8-64000x1.bmp",
+        /*
         "test_input/badbitcount.bmp",
         "test_input/badwidth.bmp",
         "test_input/badheadersize.bmp",
@@ -149,6 +154,7 @@ int main(int argc, char** argv)
         "test_input/8bpp-pixels-not-in-palette.bmp",
         "test_input/filesize-bad.bmp",
         "test_input/filesize-zero.bmp"
+        */
     };
     
     char outputFile[500];
