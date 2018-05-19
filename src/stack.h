@@ -66,4 +66,9 @@ stack_peek(Stack* stack) {
     return stack->buffer[stack->size - 1];
 }
 
+static inline void
+stack_clear(Stack* stack) {
+    stack->size = 0;
+}
+
 #endif // STACK_H

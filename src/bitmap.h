@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <memory.h>
 #include "types.h"
+#include "stack.h"
 
 #ifndef BITMAP_H
 #define BITMAP_H
@@ -37,6 +38,12 @@
 #define DPI300  DPI(300)
 #define DPI2540 DPI(2540)
 #define DPI4000 DPI(4000)
+
+#define MAP(v, wordSize) (u08) ((v) / (pow(2, (wordSize)) - 1) * 255)
+#define LOG(n) (u08) (log2((n)))
+#define CLAMP(value, mn, mx) min(max((value), (mn)), (max))
+
+#define FROM2D(x, y, w) ((y) * (w) + (x))
 
 #pragma pack(push,1)
 
@@ -758,9 +765,6 @@ bitmap_load_core(FILE* file, s32* width, s32* height) {
     return result;
 }
 
-#define MAP(v, wordSize) (u08) ((v) / (pow(2, (wordSize)) - 1) * 255)
-#define LOG(n) (u08) (log2((n)))
-
 static inline u08*
 bitmap_load(FILE* file, s32* width, s32* height) {
     BitmapHeader header;
@@ -1072,5 +1076,177 @@ bitmap_save(FILE* file, s32 width, s32 height, const u08* data) {
     free(bitmap.Info.Core);
     free(bitmap.Data.Bytes);
 }
+
+static inline RgbQuad
+centroid(RgbQuad* quads, u32 size) {
+    f32 red, green, blue, alpha;
+    red = green = blue = 0;
+    
+    for (u32 i = 0; i < size; i++) {
+        // TODO: SIMD Vectorize?
+        red += quads[i].Red;
+        green += quads[i].Green;
+        blue += quads[i].Blue;
+    }
+    
+    // TODO: Do we care about alpha, perhaps optional?
+    RgbQuad result;
+    result.Red = (u08) (red / size);
+    result.Green = (u08) (green / size);
+    result.Blue = (u08) (blue / size);
+    result.Alpha = 0xFF;
+    
+    return result;
+}
+
+static inline f64
+distance(RgbQuad* from, RgbQuad* to) {
+    // TODO: Do we care about alpha for this?
+    s32 red, green, blue, alpha;
+    red = abs(from->Red - to->Red);
+    green = abs(from->Green - to->Green);
+    blue = abs(from->Blue - to->Blue);
+    
+    return sqrt(pow(red, 2) + pow(green, 2) + pow(blue, 2));
+}
+
+static inline RgbQuad*
+kmeans_cluster(RgbQuad* data, u32 width, u32 height, u32 clusterCount) {
+    RgbQuad* centroids = malloc(sizeof(RgbQuad) * clusterCount);
+    
+    Stack* clusters = malloc(sizeof(Stack) * clusterCount);
+    for (u32 i = 0; i < clusterCount; i++) {
+        stack_init(clusters + i, 16);
+    }
+    
+    // NOTE: Place initial centroids, starting with a grayscale palette of clusterCount colors
+    f32 pts = (f32) clusterCount;
+    f32 jmp = 256 / pts;
+    RgbQuad* currentCentroid = centroids;
+    for (u32 i = 0; i < pts; i++) {
+        currentCentroid->Red = jmp * i;
+        currentCentroid->Green = jmp * i;
+        currentCentroid->Blue =  jmp * i;
+        currentCentroid-> Alpha = 0xFF;
+        currentCentroid++;
+    }
+    
+    // NOTE: Do n iterations of k-means
+    for (u32 n = 0; n < 1; n++) {
+        for (s32 i = 0; i < clusterCount; i++)
+            stack_clear(clusters + i);
+        
+        for (u32 y = 0; y < height; y++) {
+            for (u32 x = 0; x < width; x++) {
+                u32 i = width * y + x;
+                RgbQuad* pixel = data + i;
+                
+                u32 minIndex;
+                f32 minDist = 256 * 256; // Larger than furthest distance in the colorspace
+                for (u32 cent = 0; cent < clusterCount; cent++) {
+                    RgbQuad* centroid = centroids + cent;
+                    f32 dist = distance(pixel, centroid);
+                    
+                    if (dist < minDist) {
+                        minDist = dist;
+                        minIndex = cent;
+                    }
+                }
+                
+                Stack* cluster = clusters + minIndex;
+                stack_push(cluster, pixel);
+            }
+        }
+        
+        // NOTE: Recompute centroids from new clusters
+        for (s32 i = 0; i < clusterCount; i++) {
+            Stack* cluster = clusters + i;
+            RgbQuad* clusterData = *((RgbQuad**) cluster->buffer);
+            centroids[i] = centroid(clusterData, cluster->size);
+        }
+    }
+    
+    return centroids;
+}
+
+static inline RgbQuad*
+palette_closets(RgbQuad* color, RgbQuad* palette, u32 paletteSize) {
+    u32 minIndex = 0;
+    f64 minSoFar = 1000;
+    
+    for (u32 i = 0; i < paletteSize; i++) {
+        f64 dist = distance(color, palette + i);
+        
+        if (dist < minSoFar) {
+            minSoFar = dist;
+            minIndex = i;
+        }
+    }
+    
+    return palette + minIndex;
+}
+
+static inline void
+dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u32 paletteSize) {
+    for (s64 y = 0; y < height; y++) {
+        for (s64 x = 0; x < width; x++) {
+            u32 i = width * y + x;
+            
+            RgbQuad* color = data + i;
+            RgbQuad* palColor = palette_closets(color, palette, paletteSize);
+            
+            f32 errorR, errorG, errorB;
+            errorR = (color->Red - palColor->Red) / 255.0;
+            errorG = (color->Green - palColor->Green) / 255.0;
+            errorB = (color->Blue - palColor->Blue) / 255.0;
+            *color = *palColor;
+            
+            // NOTE: Push error to pixels we have not yet dithered
+            RgbQuad* next;
+            f32 pushR, pushG, pushB;
+            if (x + 1 < width) {
+                next = data + FROM2D(x + 1, y, width);
+                pushR = next->Red + (errorR * 7.0 / 16.0) * 255.0;
+                pushG = next->Green + (errorG * 7.0 / 16.0) * 255.0;
+                pushB =  next->Blue + (errorB * 7.0 / 16.0) * 255.0;
+                
+                next->Red = (u08) min(round(pushR), 255);
+                next->Green = (u08) min(round(pushG), 255);
+                next->Blue = (u08) min(round(pushB), 255);
+            }
+            if (x - 1 >= 0 && y + 1 < height) {
+                next = data + FROM2D(x - 1, y + 1, width);
+                pushR = next->Red + (errorR * 3.0 / 16.0) * 255.0;
+                pushG = next->Green + (errorG * 3.0 / 16.0) * 255.0;
+                pushB =  next->Blue + (errorB * 3.0 / 16.0) * 255.0;
+                
+                next->Red = (u08) min(round(pushR), 255);
+                next->Green = (u08) min(round(pushG), 255);
+                next->Blue = (u08) min(round(pushB), 255);
+            }
+            if (y + 1 < height) {
+                next = data + FROM2D(x, y + 1, width);
+                pushR = next->Red + (errorR * 5.0 / 16.0) * 255.0;
+                pushG = next->Green + (errorG * 5.0 / 16.0) * 255.0;
+                pushB =  next->Blue + (errorB * 5.0 / 16.0) * 255.0;
+                
+                next->Red = (u08) min(round(pushR), 255);
+                next->Green = (u08) min(round(pushG), 255);
+                next->Blue = (u08) min(round(pushB), 255);
+            }
+            if (x + 1 < width && y + 1 < height) {
+                next = data + FROM2D(x + 1, y + 1, width);
+                pushR = next->Red + (errorR * 1.0 / 16.0) * 255.0;
+                pushG = next->Green + (errorG * 1.0 / 16.0) * 255.0;
+                pushB =  next->Blue + (errorB * 1.0 / 16.0) * 255.0;
+                
+                next->Red = (u08) min(round(pushR), 255);
+                next->Green = (u08) min(round(pushG), 255);
+                next->Blue = (u08) min(round(pushB), 255);
+            }
+        }
+    }
+}
+
 
 #endif // BITMAP_H
