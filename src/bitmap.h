@@ -1116,7 +1116,7 @@ distance_manhattan(RgbQuad* from, RgbQuad* to) {
     f32 distG = from->Green - to->Green;
     f32 distB = from->Blue - to->Blue;
     
-    return abs(distR) + abs(distG) + abs(distB);
+    return fabsf(distR) + fabsf(distG) + fabsf(distB);
 }
 
 static inline RgbQuad*
@@ -1219,9 +1219,9 @@ dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u3
                 pushG = next->Green + (errorG * 7.0 / 16.0) * 255.0;
                 pushB =  next->Blue + (errorB * 7.0 / 16.0) * 255.0;
                 
-                next->Red = (u08) min(round(pushR), 255);
-                next->Green = (u08) min(round(pushG), 255);
-                next->Blue = (u08) min(round(pushB), 255);
+                next->Red = (u08) MIN(round(pushR), 255);
+                next->Green = (u08) MIN(round(pushG), 255);
+                next->Blue = (u08) MIN(round(pushB), 255);
             }
             if (x - 1 >= 0 && y + 1 < height) {
                 next = data + FROM2D(x - 1, y + 1, width);
@@ -1229,9 +1229,9 @@ dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u3
                 pushG = next->Green + (errorG * 3.0 / 16.0) * 255.0;
                 pushB =  next->Blue + (errorB * 3.0 / 16.0) * 255.0;
                 
-                next->Red = (u08) min(round(pushR), 255);
-                next->Green = (u08) min(round(pushG), 255);
-                next->Blue = (u08) min(round(pushB), 255);
+                next->Red = (u08) MIN(round(pushR), 255);
+                next->Green = (u08) MIN(round(pushG), 255);
+                next->Blue = (u08) MIN(round(pushB), 255);
             }
             if (y + 1 < height) {
                 next = data + FROM2D(x, y + 1, width);
@@ -1239,9 +1239,9 @@ dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u3
                 pushG = next->Green + (errorG * 5.0 / 16.0) * 255.0;
                 pushB =  next->Blue + (errorB * 5.0 / 16.0) * 255.0;
                 
-                next->Red = (u08) min(round(pushR), 255);
-                next->Green = (u08) min(round(pushG), 255);
-                next->Blue = (u08) min(round(pushB), 255);
+                next->Red = (u08) MIN(round(pushR), 255);
+                next->Green = (u08) MIN(round(pushG), 255);
+                next->Blue = (u08) MIN(round(pushB), 255);
             }
             if (x + 1 < width && y + 1 < height) {
                 next = data + FROM2D(x + 1, y + 1, width);
@@ -1249,9 +1249,9 @@ dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u3
                 pushG = next->Green + (errorG * 1.0 / 16.0) * 255.0;
                 pushB =  next->Blue + (errorB * 1.0 / 16.0) * 255.0;
                 
-                next->Red = (u08) min(round(pushR), 255);
-                next->Green = (u08) min(round(pushG), 255);
-                next->Blue = (u08) min(round(pushB), 255);
+                next->Red = (u08) MIN(round(pushR), 255);
+                next->Green = (u08) MIN(round(pushG), 255);
+                next->Blue = (u08) MIN(round(pushB), 255);
             }
         }
     }
