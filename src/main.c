@@ -16,15 +16,11 @@ int main(int argc, char** argv)
     FILE* output = fopen("test.bmp", "wb");
     
     RgbQuad* palette = kmeans_cluster(rgbData, width, height, 256);
-    //u32* palette = malloc(sizeof(u32) * 4);
-    //palette[0] = 0xFFdc0023;
-    //palette[1] = 0xFF1f00e0;
-    //palette[0] = 0xFFFF0000;
-    //palette[1] = 0xFF0000FF;
-    //palette[2] = 0xFF9c0063;
-    //palette[3] = 0xFF5d00a2;
+    //u32* palette = malloc(sizeof(u32) * 2);
+    //palette[0] = 0xFF000000;
+    //palette[1] = 0xFFFFFFFF;
     
-    dither_floydsteinberg(rgbData, width, height, (RgbQuad*) palette, 256);
+    dither_floydsteinberg(rgbData, width, height, (RgbQuad*) palette, 2);
     
     // Save the bitmap to disk
     bitmap_save(output, width, height, data);
@@ -39,11 +35,12 @@ int main(int argc, char** argv)
     
     // Input files
     char* images[] = {
+        "test_input/lenna.bmp",
+        "test_input/test.bmp",
         "test_input/rle8-encoded-320x240.bmp",
         "test_input/rle8-absolute-320x240.bmp",
         "test_input/rle8-blank-160x120.bmp",
         "test_input/rle8-64000x1.bmp",
-        /*
         "test_input/badbitcount.bmp",
         "test_input/badwidth.bmp",
         "test_input/badheadersize.bmp",
@@ -186,7 +183,6 @@ int main(int argc, char** argv)
         "test_input/8bpp-pixels-not-in-palette.bmp",
         "test_input/filesize-bad.bmp",
         "test_input/filesize-zero.bmp"
-        */
     };
     
     char outputFile[500];

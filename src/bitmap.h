@@ -1110,6 +1110,15 @@ distance(RgbQuad* from, RgbQuad* to) {
     return sqrt(pow(red, 2) + pow(green, 2) + pow(blue, 2));
 }
 
+static inline f64
+distance_manhattan(RgbQuad* from, RgbQuad* to) {
+    f32 distR = from->Red - to->Red;
+    f32 distG = from->Green - to->Green;
+    f32 distB = from->Blue - to->Blue;
+    
+    return abs(distR) + abs(distG) + abs(distB);
+}
+
 static inline RgbQuad*
 kmeans_cluster(RgbQuad* data, u32 width, u32 height, u32 clusterCount) {
     RgbQuad* centroids = malloc(sizeof(RgbQuad) * clusterCount);
@@ -1145,7 +1154,7 @@ kmeans_cluster(RgbQuad* data, u32 width, u32 height, u32 clusterCount) {
                 f32 minDist = 256 * 256; // Larger than furthest distance in the colorspace
                 for (u32 cent = 0; cent < clusterCount; cent++) {
                     RgbQuad* centroid = centroids + cent;
-                    f32 dist = distance(pixel, centroid);
+                    f32 dist = distance_manhattan(pixel, centroid);
                     
                     if (dist < minDist) {
                         minDist = dist;
@@ -1175,7 +1184,7 @@ palette_closets(RgbQuad* color, RgbQuad* palette, u32 paletteSize) {
     f64 minSoFar = 1000;
     
     for (u32 i = 0; i < paletteSize; i++) {
-        f64 dist = distance(color, palette + i);
+        f64 dist = distance_manhattan(color, palette + i);
         
         if (dist < minSoFar) {
             minSoFar = dist;
