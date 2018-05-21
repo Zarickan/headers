@@ -39,6 +39,16 @@ int main(int argc, char** argv)
     char* images[] = {
         //"test_input/pal8rle.bmp",
         //*
+        //"test_input/pixeldata-rle8-toomuch.bmp",
+        "test_input/rletopdown.bmp",
+        "test_input/rle4-no-end-of-bitmap-marker.bmp",
+        "test_input/rle8-height-negative.bmp",
+        "test_input/rle8-no-end-of-bitmap-marker.bmp",
+        "test_input/rle4-height-negative.bmp",
+        "test_input/pal4rletrns.bmp",
+        "test_input/pal8rlecut.bmp",
+        "test_input/pal8rletrns.bmp",
+        "test_input/pal4rlecut.bmp",
         "test_input/rgb32bfdef.bmp",
         "test_input/rgb32fakealpha.bmp",
         "test_input/rgb32h52.bmp",

@@ -856,6 +856,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     s32 shift = (j + extraShift) * info.v1.BitCount;
                     s32 pixel = (*pixelData & mask) >> shift;
                     
+                    // NOTE: If index is outside the palette use the firts color in palette
+                    // TODO: Use the first, last, or black?
                     if (pixel > colorCount)
                         pixel = 0;
                     
@@ -998,12 +1000,13 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         
         // NOTE: Set all pixels to 0 (in case RLE only writes to half the pixels before stopping)
         // TODO: Should this be black or transparent, currently we use transparent?
+        // TODO: should this use a color from the palette? If yes this should be the same one chosen for palette bitmaps
         memset(rgb, 0x00, info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
         RgbQuad* rgbStart = rgb;
         
         s08 absolute = 0;
         s32 x = 0, y = 0;
-        for (u32 pos = 0; pos < dataSize; pos++) {
+        for (u32 pos = 0; (pixelData - data) < dataSize; pos++) {
             u08 word = *pixelData++;
             u08 value = *pixelData++;
             
@@ -1013,6 +1016,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     case 0x00: // End of line
                     y++;
                     x = 0;
+                    rgb = rgbStart + FROM2D(x, y, *width);
                     continue;
                     
                     case 0x01: // End of file
@@ -1077,6 +1081,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                 
                 pixelData += (value / 2 + value % 2) % 2;
             }
+            
+            pos = pixelData - data - 1;
         }
         
         free(colors);
@@ -1097,12 +1103,13 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         
         // NOTE: Set all pixels to 0 (in case RLE only wirtes to half the pixels before stopping)
         // TODO: Should this be black or transparent, currently we use transparent?
+        // TODO: should this use a color from the palette? If yes this should be the same one chosen for palette bitmaps
         memset(rgb, 0x00, info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
         RgbQuad* rgbStart = rgb;
         
         s08 absolute = 0;
         s32 x = 0, y = 0;
-        for (u32 pos = 0; pos < dataSize; pos++) {
+        for (u32 pos = 0; (pixelData - data) < dataSize; pos++) {
             u08 word = *pixelData++;
             u08 value = *pixelData++;
             
@@ -1112,6 +1119,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     case 0x00: // End of line
                     y++;
                     x = 0;
+                    rgb = rgbStart + FROM2D(x, y, *width);
                     continue;
                     
                     case 0x01: // End of file
@@ -1163,6 +1171,21 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         }
         
         free(colors);
+    }
+    
+    // NOTE: Invert the bitmap if top-down
+    if (info.v1.Height < 0) {
+        u32* rawData = (u32*) result;
+        for (s32 row = 0; row < (*height) / 2; row++) {
+            for (s32 column = 0; column < (*width); column++) {
+                s32 src = (*width) * row + column;
+                s32 tgt = (*width) * ((*height) - row - 1) + column;
+                
+                rawData[src] ^= rawData[tgt];
+                rawData[tgt] ^= rawData[src];
+                rawData[src] ^= rawData[tgt];
+            }
+        }
     }
     
     if (data)
