@@ -482,6 +482,7 @@ create_bitmap(Bitmap* bitmap, BitmapHeader* header, BitmapInfoHeader* bitmapInfo
     header->Size = sizeof(BitmapHeader) + bitmapInfo->Size + bitmapInfo->SizeImage;
     header->Reserved[0] = 0;
     header->Reserved[1] = 0;
+    
     header->Offset = sizeof(BitmapHeader) + bitmapInfo->Size;
     
     bitmap->Header = *header;
@@ -684,6 +685,8 @@ rle8_decompress(u08* data, u32 dataSize, u32 resultSize) {
 
 static inline u08*
 bitmap_load_core(FILE* file, s32* width, s32* height) {
+    return NULL;
+    
     BitmapHeader header;
     BitmapCoreHeader info;
     bitmap_read_info(&header, &info, file);
@@ -814,7 +817,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     
     if (!*width || !*height)
         return result;
-    ;
+    
     u08* data = malloc(dataSize);
     u08* pixelData = data;
     
@@ -908,7 +911,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     rgb->Red   = pixel.Red;
                     rgb->Green = pixel.Green;
                     rgb->Blue  = pixel.Blue;
-                    rgb->Alpha = pixel.Alpha;
+                    rgb->Alpha = 0xFF - pixel.Alpha;
+                    // NOTE: Alpha is inverted, like with palette images
                     
                     pixelData += sizeof(RgbQuad);
                 }
@@ -921,6 +925,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     // NOTE: BitFields
     else if (info.v1.Compression == BI_BITFIELDS || info.v1.Compression == BI_ALPHABITFIELDS) {
         s32 usesAlpha = !(version <= 2 && info.v1.Compression != BI_ALPHABITFIELDS);
+        
+        // NOTE: For versions > 2 we only use alpha if the bitfield specifies any values of ralpha, IE. has any bits set
+        if (version  >= 3)
+            usesAlpha = usesAlpha && info.v3.AlphaMask;
         
         // NOTE: While v1 bitmaps have no fields for RGB bitmasks they come right after the info header,
         // for convinience we read them into the fields of the v2 header.
@@ -976,6 +984,107 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     }
     // NOTE: RLE4
     else if (info.v1.Compression == BI_RLE4) {
+        info.v1.Planes = 1; // NOTE: Planes should always be 1
+        u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
+        u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
+        colorCount = colorCount == 0 ? maxColorCount : colorCount;
+        
+        RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
+        fread(colors, sizeof(RgbQuad), colorCount, file);
+        
+        if (header.Offset)
+            fseek(file, header.Offset, SEEK_SET);
+        fread(pixelData, sizeof(u08), dataSize, file);
+        
+        // NOTE: Set all pixels to 0 (in case RLE only writes to half the pixels before stopping)
+        // TODO: Should this be black or transparent, currently we use transparent?
+        memset(rgb, 0x00, info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
+        RgbQuad* rgbStart = rgb;
+        
+        s08 absolute = 0;
+        s32 x = 0, y = 0;
+        u64 written = 0;
+        for (u32 pos = 0; pos < dataSize; pos++) {
+            u08 word = *pixelData++;
+            u08 value = *pixelData++;
+            
+            // NOTE: Control
+            if (word == 0x00) {
+                switch (value) {
+                    case 0x00: // End of line
+                    printf("End of line\n");
+                    y++;
+                    x = 0;
+                    continue;
+                    
+                    case 0x01: // End of file
+                    // Setting this makes the for loop exit
+                    pos = dataSize;
+                    continue;
+                    
+                    case 0x02: // Delta
+                    u08 right = *pixelData++;
+                    u08 down = *pixelData++;
+                    
+                    // TODO: Check that these are within bounds
+                    x += right;
+                    y += down;
+                    rgb = rgbStart + FROM2D(x, y, *width);
+                    continue;
+                    
+                    default: // Absolute marker
+                    absolute = 1;
+                    break;
+                }
+            }
+            
+            if(!absolute) {
+                u32 upper = word / 2 + word % 2;
+                for (u08 i = 0; i < upper; i++) {
+                    *rgb = *(colors + (value & 0x0F));
+                    rgb->Alpha = (u08) (0xFF - rgb->Alpha);
+                    rgb++;
+                    x++;
+                    
+                    if (i == upper - 1 && word % 2 == 1)
+                        continue;
+                    
+                    *rgb = *(colors + ((value & 0xF0) >> 4));
+                    rgb->Alpha = (u08) (0xFF - rgb->Alpha);
+                    rgb++;
+                    x++;
+                }
+            }
+            else {
+                u32 upper = value / 2 + value % 2;
+                for (u08 i = 0; i < upper; i++) { // RLE4 has two per pixel
+                    u08 runData = *pixelData++;
+                    
+                    RgbQuad color = *(colors + ((runData & 0xF0) >> 4));
+                    *rgb = color;
+                    rgb->Alpha = (u08) (0xFF - rgb->Alpha);
+                    rgb++;
+                    x++;
+                    written++;
+                    
+                    if (i == upper - 1 && value % 2 == 1)
+                        continue;
+                    
+                    color = *(colors + (runData & 0x0F));
+                    *rgb = color;
+                    rgb->Alpha = (u08) (0xFF - rgb->Alpha);
+                    rgb++;
+                    x++;
+                    written++;
+                }
+                
+                u32 rowSize = (u32) (floor((8 * (value / 2 + value % 2) + 31.0) / 32.0) * 4);
+                u32 rowOffset = (u32) (rowSize - (value / 2 + value % 2));
+                pixelData += rowOffset;
+            }
+        }
+        
+        free(colors);
     }
     // NOTE: RLE8
     else if (info.v1.Compression == BI_RLE8) {
@@ -991,26 +1100,38 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
+        // NOTE: Set all pixels to 0 (in case RLE only wirtes to half the pixels before stopping)
+        // TODO: Should this be black or transparent, currently we use transparent?
+        memset(rgb, 0x00, info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
+        RgbQuad* rgbStart = rgb;
+        
         s08 absolute = 0;
+        s32 x = 0, y = 0;
         for (u32 pos = 0; pos < dataSize; pos++) {
-            u08 length = *pixelData;
-            pixelData++;
-            u08 value = *pixelData;
-            pixelData++;
+            u08 word = *pixelData++;
+            u08 value = *pixelData++;
             
             // NOTE: Control
-            if (length == 0x00) {
+            if (word == 0x00) {
                 switch (value) {
                     case 0x00: // End of line
+                    y++;
+                    x = 0;
                     continue;
                     
                     case 0x01: // End of file
+                    // Setting this makes the for loop exit
                     pos = dataSize;
                     continue;
                     
                     case 0x02: // Delta
-                    printf("Delta\n");
-                    pixelData += 2;
+                    u08 right = *pixelData++;
+                    u08 down = *pixelData++;
+                    
+                    // TODO: Check that these are within bounds
+                    x += right;
+                    y += down;
+                    rgb = rgbStart + FROM2D(x, y, *width);
                     continue;
                     
                     default: // Absolute marker
@@ -1020,12 +1141,13 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             }
             
             if(!absolute) {
-                for (u08 i = 0; i < length; i++) {
+                for (u08 i = 0; i < word; i++) {
                     RgbQuad color = *(colors + value);
                     
                     *rgb = color;
                     rgb->Alpha = (u08) (0xFF - rgb->Alpha);
                     rgb++;
+                    x++;
                 }
             }
             else {
@@ -1036,6 +1158,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     *rgb = color;
                     rgb->Alpha = (u08) (0xFF - rgb->Alpha);
                     rgb++;
+                    x++;
                 }
                 
                 u32 rowSize = (u32) (floor((8 * value + 31.0) / 32.0) * 4);
@@ -1043,9 +1166,11 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                 pixelData += rowOffset;
             }
         }
+        
+        free(colors);
     }
     
-    if (!data)
+    if (data)
         free(data);
     
     return result;
