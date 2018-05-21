@@ -48,7 +48,7 @@
 #pragma pack(push,1)
 
 typedef union RgbDouble {
-    u16 value;
+    u16 Value;
     struct {
         u16 Blue : 5;
         u16 Green : 5;
@@ -88,7 +88,7 @@ typedef struct BitmapHeader {
     u32 Size;
     u16 Reserved[2];
     u32 Offset;
-}  BitmapHeader;
+} BitmapHeader;
 
 typedef struct BitmapCoreHeader {
     u32 Size;
@@ -125,7 +125,7 @@ typedef struct BitmapInfoV2Header {
     u32 YPelsPerMeter;
     u32 UsedColors;
     u32 ImportantColors;
-    
+
     // V2
     u32 RedMask;
     u32 GreenMask;
@@ -144,12 +144,12 @@ typedef struct BitmapInfoV3Header {
     u32 YPelsPerMeter;
     u32 UsedColors;
     u32 ImportantColors;
-    
+
     // V2
     u32 RedMask;
     u32 GreenMask;
     u32 BlueMask;
-    
+
     // V3
     u32 AlphaMask;
 } BitmapInfoV3Header;
@@ -166,21 +166,21 @@ typedef struct BitmapInfoV4Header {
     u32 YPelsPerMeter;
     u32 UsedColors;
     u32 ImportantColors;
-    
+
     // V2
     u32 RedMask;
     u32 GreenMask;
     u32 BlueMask;
-    
+
     // V3
     u32 AlphaMask;
-    
+
     // V4
-    u32       ColorSpaceType;
+    u32 ColorSpaceType;
     CIETriple Endpoints;
-    u32       GammaRed;
-    u32       GammaGreen;
-    u32       GammaBlue;
+    u32 GammaRed;
+    u32 GammaGreen;
+    u32 GammaBlue;
 } BitmapInfoV4Header;
 
 typedef struct BitmapInfoV5Header {
@@ -195,22 +195,22 @@ typedef struct BitmapInfoV5Header {
     u32 YPelsPerMeter;
     u32 UsedColors;
     u32 ImportantColors;
-    
+
     // V2
     u32 RedMask;
     u32 GreenMask;
     u32 BlueMask;
-    
+
     // V3
     u32 AlphaMask;
-    
+
     // V4
-    u32       ColorSpaceType;
+    u32 ColorSpaceType;
     CIETriple Endpoints;
-    u32       GammaRed;
-    u32       GammaGreen;
-    u32       GammaBlue;
-    
+    u32 GammaRed;
+    u32 GammaGreen;
+    u32 GammaBlue;
+
     // V5
     u32 Intent;
     u32 ProfileData;
@@ -503,7 +503,7 @@ write_bitmap_to_file(Bitmap* bitmap, FILE* file) {
     fwrite(&bitmap->Header, sizeof(BitmapHeader), 1, file);
     fwrite(bitmap->Info.V1, bitmap->Info.V1->Size, 1, file);
     
-    if (bitmap_version(bitmap->Info.V1) == BITMAP_VCORE) {
+    if (bitmap_version(&bitmap->Info) == BITMAP_VCORE) {
         u32 size = (u32) (bitmap->Info.V1->Width * bitmap->Info.V1->Height * (bitmap->Info.V1->BitCount / 8));
         
         fwrite(bitmap->Data.Bytes, sizeof(u08), size, file);
@@ -531,8 +531,8 @@ display_palette(BitmapInfoHeader* header) {
 static inline void
 display_bitmapinfo(BitmapInfoHeader* header) {
     BitmapInfo info = { .V1 = header };
-    s32 version = bitmap_get_version((BitmapCoreHeader*) info.Core);
-    u64 colorCount = bitmap_get_colorcount((BitmapCoreHeader*) info.V1);
+    s32 version = bitmap_get_version(info.Core);
+    u64 colorCount = bitmap_get_colorcount(info.Core);
     
     printf("  BitmapInfoHeader:\n");
     printf("  Version:        %i\n", version);
@@ -585,8 +585,8 @@ display_bitmapinfo(BitmapInfoHeader* header) {
 static inline void
 log_bitmapinfo(BitmapInfoHeader* header, FILE* file) {
     BitmapInfo info = { .V1 = header };
-    s32 version = bitmap_get_version((BitmapCoreHeader*) info.Core);
-    u64 colorCount = bitmap_get_colorcount((BitmapCoreHeader*) info.V1);
+    s32 version = bitmap_version(&info);
+    u64 colorCount = bitmap_get_colorcount(info.Core);
     
     fprintf(file, "  BitmapInfoHeader:\n");
     fprintf(file, "  Version:        %i\n", version);
@@ -650,37 +650,9 @@ power(u32 base, u32 power) {
 static inline u32
 setbits(u32 number)
 {
-    number -= (number >> 1) & 0x55555555;
-    number = (number & 0x33333333) + ((number >> 2) & 0x33333333);
+    number -= number >> 1 & 0x55555555;
+    number = (number & 0x33333333) + (number >> 2 & 0x33333333);
     return (((number + (number >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
-}
-
-static inline u08*
-rle4_decompress(u08* data, u32 dataSize, u32 resultSize) {
-    return NULL;
-}
-
-static inline u08*
-rle8_decompress(u08* data, u32 dataSize, u32 resultSize) {
-    u08* buffer = malloc(resultSize);
-    u08* result = buffer;
-    
-    for (u32 pos = 0; pos < dataSize; pos++) {
-        u08 length = buffer[pos];
-        
-        // NOTE: Control
-        if (length == 0x00) {
-            
-            
-            continue;
-        }
-        
-        for (u08 i = 0; i < length; i++) {
-            *result++ = buffer[++pos];
-        }
-    }
-    
-    return buffer;
 }
 
 static inline u08*
@@ -799,7 +771,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     
     // NOTE: Bad bitcount, calculate it from Width and SizeImage according to formula
     if (!(info.v1.BitCount ==  1 || info.v1.BitCount ==  2 || info.v1.BitCount ==  4 || info.v1.BitCount ==  8 || info.v1.BitCount == 16 || info.v1.BitCount == 24 || info.v1.BitCount == 32)) {
-        info.v1.BitCount = (32 * ((info.v1.SizeImage / (info.v1.Height * 4)) - (31 / 32))) / info.v1.Width;
+        info.v1.BitCount = (u16) ((32 * ((info.v1.SizeImage / (info.v1.Height * 4)) - (31 / 32))) / info.v1.Width);
     }
     
     // NOTE: Rows are fit to a DWORD (4 byte) boundary (32 is BPP of output, 31 is bpp - 1 bit)
@@ -891,7 +863,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     rgb->Red   = MAP(pixel.Red, 5);
                     rgb->Green = MAP(pixel.Green, 5);
                     rgb->Blue  = MAP(pixel.Blue, 5);
-                    rgb->Alpha = pixel.Alpha ? 0x00 : 0xFF;
+                    rgb->Alpha = (u08) (pixel.Alpha ? 0x00 : 0xFF);
                     // TODO: Currently supports alpha for bitmaps of versions that do _NOT_ support alpha,
                     // primarily v1 and v2 bitmaps. Should this feature be kept?
                     // Or only "enabled" when the version supports alpha/transparency?
@@ -913,7 +885,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     rgb->Red   = pixel.Red;
                     rgb->Green = pixel.Green;
                     rgb->Blue  = pixel.Blue;
-                    rgb->Alpha = 0xFF - pixel.Alpha;
+                    rgb->Alpha = (u08) (0xFF - pixel.Alpha);
                     // NOTE: Alpha is inverted, like with palette images
                     
                     pixelData += sizeof(RgbQuad);
@@ -943,7 +915,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
-        s32 redShift, greenShift, blueShift, alphaShift;
+        u32 redShift, greenShift, blueShift, alphaShift = 0;
         for (redShift = 0; redShift < 32 && !(info.v2.RedMask & power(2, redShift)); redShift++);
         for (greenShift = 0; greenShift < 32 && !(info.v2.GreenMask & power(2, greenShift)); greenShift++);
         for (blueShift = 0; blueShift < 32 && !(info.v2.BlueMask & power(2, blueShift)); blueShift++);
@@ -951,7 +923,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         s32 redBits = setbits(info.v2.RedMask);
         s32 greenBits = setbits(info.v2.GreenMask);
         s32 blueBits = setbits(info.v2.BlueMask);
-        s32 alphaBits;
+        s32 alphaBits = 0;
         
         // NOTE: These are only used if alpha is used
         if (usesAlpha) {
@@ -964,7 +936,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             for (s32 column = 0; column < columns; column++) {
                 u32 value = 0x00;
                 
-                u08 totalBytes = info.v1.BitCount / 8;
+                s32 totalBytes = info.v1.BitCount / 8;
                 for (s08 bytes = 0; bytes < totalBytes; bytes++) {
                     value |= ((*pixelData) << bytes * 8);
                     pixelData++;
@@ -978,7 +950,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                 rgb->Red   = MAP(red, redBits);
                 rgb->Green = MAP(green, greenBits);
                 rgb->Blue  = MAP(blue, blueBits);
-                rgb->Alpha = usesAlpha ? MAP(alpha, alphaBits): 0xFF;
+                rgb->Alpha = (u08) (usesAlpha ? MAP(alpha, alphaBits) : 0xFF);
                 rgb++;
             }
             pixelData += rowOffset;
@@ -1013,35 +985,36 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             // NOTE: Control
             if (word == 0x00) {
                 switch (value) {
-                    case 0x00: // End of line
-                    y++;
-                    x = 0;
-                    rgb = rgbStart + FROM2D(x, y, *width);
-                    continue;
-                    
-                    case 0x01: // End of file
-                    // Setting this makes the for loop exit
-                    pos = dataSize;
-                    continue;
-                    
-                    case 0x02: // Delta
-                    u08 right = *pixelData++;
-                    u08 down = *pixelData++;
-                    
-                    // TODO: Check that these are within bounds
-                    x += right;
-                    y += down;
-                    rgb = rgbStart + FROM2D(x, y, *width);
-                    continue;
-                    
-                    default: // Absolute marker
-                    absolute = 1;
-                    break;
+                    case 0x00: { // End of line
+                        y++;
+                        x = 0;
+                        rgb = rgbStart + FROM2D(x, y, *width);
+                        continue;
+                    }
+                    case 0x01: {// End of file
+                        // Setting this makes the for loop exit
+                        pos = dataSize;
+                        continue;
+                    }
+                    case 0x02: { // Delta
+                        u08 right = *pixelData++;
+                        u08 down = *pixelData++;
+
+                        // TODO: Check that these are within bounds
+                        x += right;
+                        y += down;
+                        rgb = rgbStart + FROM2D(x, y, *width);
+                        continue;
+                    }
+                    default: { // Absolute marker
+                        absolute = 1;
+                        break;
+                    }
                 }
             }
             
             if(!absolute) {
-                u32 upper = word / 2 + word % 2;
+                u32 upper = (u32) word / 2 + word % 2;
                 for (u08 i = 0; i < upper; i++) {
                     *rgb = *(colors + (value & 0x0F));
                     rgb->Alpha = (u08) (0xFF - rgb->Alpha);
@@ -1058,7 +1031,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                 }
             }
             else {
-                u32 upper = value / 2 + value % 2;
+                u32 upper = (u32) (value / 2 + value % 2);
                 for (u08 i = 0; i < upper; i++) { // RLE4 has two per pixel
                     u08 runData = *pixelData++;
                     
@@ -1081,8 +1054,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                 
                 pixelData += (value / 2 + value % 2) % 2;
             }
-            
-            pos = pixelData - data - 1;
         }
         
         free(colors);
@@ -1101,7 +1072,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
-        // NOTE: Set all pixels to 0 (in case RLE only wirtes to half the pixels before stopping)
+        // NOTE: Set all pixels to 0 (in case RLE only writes to half the pixels before stopping)
         // TODO: Should this be black or transparent, currently we use transparent?
         // TODO: should this use a color from the palette? If yes this should be the same one chosen for palette bitmaps
         memset(rgb, 0x00, info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
@@ -1116,30 +1087,31 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             // NOTE: Control
             if (word == 0x00) {
                 switch (value) {
-                    case 0x00: // End of line
-                    y++;
-                    x = 0;
-                    rgb = rgbStart + FROM2D(x, y, *width);
-                    continue;
-                    
-                    case 0x01: // End of file
-                    // Setting this makes the for loop exit
-                    pos = dataSize;
-                    continue;
-                    
-                    case 0x02: // Delta
-                    u08 right = *pixelData++;
-                    u08 down = *pixelData++;
-                    
-                    // TODO: Check that these are within bounds
-                    x += right;
-                    y += down;
-                    rgb = rgbStart + FROM2D(x, y, *width);
-                    continue;
-                    
-                    default: // Absolute marker
-                    absolute = 1;
-                    break;
+                    case 0x00: {// End of line
+                        y++;
+                        x = 0;
+                        rgb = rgbStart + FROM2D(x, y, *width);
+                        continue;
+                    }
+                    case 0x01: { // End of file
+                        // Setting this makes the for loop exit
+                        pos = dataSize;
+                        continue;
+                    }
+                    case 0x02: { // Delta
+                        u08 right = *pixelData++;
+                        u08 down = *pixelData++;
+
+                        // TODO: Check that these are within bounds
+                        x += right;
+                        y += down;
+                        rgb = rgbStart + FROM2D(x, y, *width);
+                        continue;
+                    }
+                    default: { // Absolute marker
+                        absolute = 1;
+                        break;
+                    }
                 }
             }
             
@@ -1222,7 +1194,7 @@ bitmap_save(FILE* file, s32 width, s32 height, const u08* data) {
 
 static inline RgbQuad
 centroid(RgbQuad* quads, u32 size) {
-    f32 red, green, blue, alpha;
+    f32 red, green, blue;
     red = green = blue = 0;
     
     for (u32 i = 0; i < size; i++) {
@@ -1242,18 +1214,18 @@ centroid(RgbQuad* quads, u32 size) {
     return result;
 }
 
-static inline f64
+static inline f32
 distance(RgbQuad* from, RgbQuad* to) {
     // TODO: Do we care about alpha for this?
-    s32 red, green, blue, alpha;
+    s32 red, green, blue;
     red = abs(from->Red - to->Red);
     green = abs(from->Green - to->Green);
     blue = abs(from->Blue - to->Blue);
     
-    return sqrt(pow(red, 2) + pow(green, 2) + pow(blue, 2));
+    return (f32) sqrt(pow(red, 2) + pow(green, 2) + pow(blue, 2));
 }
 
-static inline f64
+static inline f32
 distance_manhattan(RgbQuad* from, RgbQuad* to) {
     f32 distR = from->Red - to->Red;
     f32 distG = from->Green - to->Green;
@@ -1272,13 +1244,12 @@ kmeans_cluster(RgbQuad* data, u32 width, u32 height, u32 clusterCount) {
     }
     
     // NOTE: Place initial centroids, starting with a grayscale palette of clusterCount colors
-    f32 pts = (f32) clusterCount;
-    f32 jmp = 256 / pts;
+    u08 jmp = (u08) (256 / clusterCount);
     RgbQuad* currentCentroid = centroids;
-    for (u32 i = 0; i < pts; i++) {
-        currentCentroid->Red = jmp * i;
-        currentCentroid->Green = jmp * i;
-        currentCentroid->Blue =  jmp * i;
+    for (u32 i = 0; i < clusterCount; i++) {
+        currentCentroid->Red = (u08) (jmp * i);
+        currentCentroid->Green = (u08) (jmp * i);
+        currentCentroid->Blue = (u08) (jmp * i);
         currentCentroid-> Alpha = 0xFF;
         currentCentroid++;
     }
@@ -1293,7 +1264,7 @@ kmeans_cluster(RgbQuad* data, u32 width, u32 height, u32 clusterCount) {
                 u32 i = width * y + x;
                 RgbQuad* pixel = data + i;
                 
-                u32 minIndex;
+                u32 minIndex = 0;
                 f32 minDist = 256 * 256; // Larger than furthest distance in the colorspace
                 for (u32 cent = 0; cent < clusterCount; cent++) {
                     RgbQuad* centroid = centroids + cent;
@@ -1342,15 +1313,15 @@ static inline void
 dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u32 paletteSize) {
     for (s64 y = 0; y < height; y++) {
         for (s64 x = 0; x < width; x++) {
-            u32 i = width * y + x;
+            s64 i = width * y + x;
             
             RgbQuad* color = data + i;
             RgbQuad* palColor = palette_closets(color, palette, paletteSize);
             
             f32 errorR, errorG, errorB;
-            errorR = (color->Red - palColor->Red) / 255.0;
-            errorG = (color->Green - palColor->Green) / 255.0;
-            errorB = (color->Blue - palColor->Blue) / 255.0;
+            errorR = ((color->Red - palColor->Red) / 255.0f);
+            errorG = ((color->Green - palColor->Green) / 255.0f);
+            errorB = ((color->Blue - palColor->Blue) / 255.0f);
             *color = *palColor;
             
             // NOTE: Push error to pixels we have not yet dithered
@@ -1358,9 +1329,9 @@ dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u3
             f32 pushR, pushG, pushB;
             if (x + 1 < width) {
                 next = data + FROM2D(x + 1, y, width);
-                pushR = next->Red + (errorR * 7.0 / 16.0) * 255.0;
-                pushG = next->Green + (errorG * 7.0 / 16.0) * 255.0;
-                pushB =  next->Blue + (errorB * 7.0 / 16.0) * 255.0;
+                pushR = (f32) (next->Red + (errorR * 7.0 / 16.0) * 255.0);
+                pushG = (f32) (next->Green + (errorG * 7.0 / 16.0) * 255.0);
+                pushB = (f32) (next->Blue + (errorB * 7.0 / 16.0) * 255.0);
                 
                 next->Red = (u08) MIN(round(pushR), 255);
                 next->Green = (u08) MIN(round(pushG), 255);
@@ -1368,9 +1339,9 @@ dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u3
             }
             if (x - 1 >= 0 && y + 1 < height) {
                 next = data + FROM2D(x - 1, y + 1, width);
-                pushR = next->Red + (errorR * 3.0 / 16.0) * 255.0;
-                pushG = next->Green + (errorG * 3.0 / 16.0) * 255.0;
-                pushB =  next->Blue + (errorB * 3.0 / 16.0) * 255.0;
+                pushR = (f32) (next->Red + (errorR * 3.0 / 16.0) * 255.0);
+                pushG = (f32) (next->Green + (errorG * 3.0 / 16.0) * 255.0);
+                pushB = (f32) (next->Blue + (errorB * 3.0 / 16.0) * 255.0);
                 
                 next->Red = (u08) MIN(round(pushR), 255);
                 next->Green = (u08) MIN(round(pushG), 255);
@@ -1378,9 +1349,9 @@ dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u3
             }
             if (y + 1 < height) {
                 next = data + FROM2D(x, y + 1, width);
-                pushR = next->Red + (errorR * 5.0 / 16.0) * 255.0;
-                pushG = next->Green + (errorG * 5.0 / 16.0) * 255.0;
-                pushB =  next->Blue + (errorB * 5.0 / 16.0) * 255.0;
+                pushR = (f32) (next->Red + (errorR * 5.0 / 16.0) * 255.0);
+                pushG = (f32) (next->Green + (errorG * 5.0 / 16.0) * 255.0);
+                pushB = (f32) (next->Blue + (errorB * 5.0 / 16.0) * 255.0);
                 
                 next->Red = (u08) MIN(round(pushR), 255);
                 next->Green = (u08) MIN(round(pushG), 255);
@@ -1388,9 +1359,9 @@ dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u3
             }
             if (x + 1 < width && y + 1 < height) {
                 next = data + FROM2D(x + 1, y + 1, width);
-                pushR = next->Red + (errorR * 1.0 / 16.0) * 255.0;
-                pushG = next->Green + (errorG * 1.0 / 16.0) * 255.0;
-                pushB =  next->Blue + (errorB * 1.0 / 16.0) * 255.0;
+                pushR = (f32) (next->Red + (errorR * 1.0 / 16.0) * 255.0);
+                pushG = (f32) (next->Green + (errorG * 1.0 / 16.0) * 255.0);
+                pushB = (f32) (next->Blue + (errorB * 1.0 / 16.0) * 255.0);
                 
                 next->Red = (u08) MIN(round(pushR), 255);
                 next->Green = (u08) MIN(round(pushG), 255);
@@ -1399,6 +1370,5 @@ dither_floydsteinberg(RgbQuad* data, u32 width, u32 height, RgbQuad* palette, u3
         }
     }
 }
-
 
 #endif // BITMAP_H
