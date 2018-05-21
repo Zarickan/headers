@@ -37,6 +37,7 @@ int main(int argc, char** argv)
     
     // Input files
     char* images[] = {
+        //"test_input/pal8rle.bmp",
         //*
         "test_input/rgb32bfdef.bmp",
         "test_input/rgb32fakealpha.bmp",
@@ -148,7 +149,7 @@ int main(int argc, char** argv)
         "test_input/pal2color.bmp",
         "test_input/pal4.bmp",
         "test_input/pal4gs.bmp",
-        //"test_input/pal4rle.bmp",
+        "test_input/pal4rle.bmp",
         "test_input/pal8.bmp",
         "test_input/pal8-0.bmp",
         "test_input/pal8badindex.bmp",
@@ -157,7 +158,7 @@ int main(int argc, char** argv)
         "test_input/pal8offs.bmp",
         //"test_input/pal8os2.bmp",
         "test_input/pal8oversizepal.bmp",
-        //"test_input/pal8rle.bmp",
+        "test_input/pal8rle.bmp",
         "test_input/pal8topdown.bmp",
         "test_input/pal8v4.bmp",
         "test_input/pal8v5.bmp",

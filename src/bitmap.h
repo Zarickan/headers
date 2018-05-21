@@ -1003,7 +1003,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         
         s08 absolute = 0;
         s32 x = 0, y = 0;
-        u64 written = 0;
         for (u32 pos = 0; pos < dataSize; pos++) {
             u08 word = *pixelData++;
             u08 value = *pixelData++;
@@ -1012,7 +1011,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             if (word == 0x00) {
                 switch (value) {
                     case 0x00: // End of line
-                    printf("End of line\n");
                     y++;
                     x = 0;
                     continue;
@@ -1065,7 +1063,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     rgb->Alpha = (u08) (0xFF - rgb->Alpha);
                     rgb++;
                     x++;
-                    written++;
                     
                     if (i == upper - 1 && value % 2 == 1)
                         continue;
@@ -1075,12 +1072,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     rgb->Alpha = (u08) (0xFF - rgb->Alpha);
                     rgb++;
                     x++;
-                    written++;
                 }
+                absolute = 0;
                 
-                u32 rowSize = (u32) (floor((8 * (value / 2 + value % 2) + 31.0) / 32.0) * 4);
-                u32 rowOffset = (u32) (rowSize - (value / 2 + value % 2));
-                pixelData += rowOffset;
+                pixelData += (value / 2 + value % 2) % 2;
             }
         }
         
@@ -1160,10 +1155,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     rgb++;
                     x++;
                 }
+                absolute = 0;
                 
-                u32 rowSize = (u32) (floor((8 * value + 31.0) / 32.0) * 4);
-                u32 rowOffset = (u32) (rowSize - value);
-                pixelData += rowOffset;
+                // NOTE: Align on WORD boudnaries
+                pixelData += value % 2;
             }
         }
         
