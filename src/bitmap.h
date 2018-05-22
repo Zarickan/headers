@@ -919,7 +919,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     // NOTE: Set default values
     // TODO: Ignore for performance?
     for (u64 i = 0; i < resultSize; i++)
-        resultRgb[i].Value = 0x00000000;
+        resultRgb[i].Value = 0xFF000000;
     
     if (!*width || !*height)
         return NULL;
