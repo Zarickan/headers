@@ -63,11 +63,14 @@ typedef struct RgbTriple {
     u08 Red;
 } RgbTriple;
 
-typedef struct RgbQuad {
-    u08 Blue;
-    u08 Green;
-    u08 Red;
-    u08 Alpha;
+typedef union RgbQuad {
+    u32 Value;
+    struct {
+        u08 Blue;
+        u08 Green;
+        u08 Red;
+        u08 Alpha;
+    };
 } RgbQuad;
 
 typedef u32 FXPT2DOT30;
@@ -275,10 +278,13 @@ bitmap_get_colorcount(BitmapCoreHeader* header) {
     return (u64) pow(2, header->BitCount * header->Planes);
 }
 
-static inline void
+static inline s32
 bitmap_read_info_from_file(BitmapHeader* header, BitmapCoreHeader* info, FILE* file) {
-    fread(header, sizeof(BitmapHeader), 1, file);
-    fread(info, sizeof(BitmapCoreHeader), 1, file);
+    u64 readHeader = fread(header, sizeof(BitmapHeader), 1, file);
+    u64 readCore = fread(info, sizeof(BitmapCoreHeader), 1, file);
+    
+    if (!readHeader || !readCore)
+        return 0;
     
     // NOTE: Read remaining fields depending on the bitmap version
     u32 v0InfoSize = sizeof(BitmapCoreHeader);
@@ -287,8 +293,12 @@ bitmap_read_info_from_file(BitmapHeader* header, BitmapCoreHeader* info, FILE* f
         u32  infoSize = info->Size - sizeof(BitmapCoreHeader);
         assert(infoSize > 0);
         
-        fread(infoPtr + v0InfoSize, sizeof(u08), infoSize, file);
+        u64 readExtra = fread(infoPtr + v0InfoSize, sizeof(u08), infoSize, file);
+        if (readExtra != infoSize)
+            return 0;
     }
+    
+    return 1;
 }
 
 static inline void
@@ -542,6 +552,7 @@ display_bitmapinfo(BitmapInfoHeader* header) {
     BitmapInfo info = { .V1 = header };
     s32 version = bitmap_get_version(info.Core);
     u64 colorCount = bitmap_get_colorcount(info.Core);
+    if (version == BITMAP_VUNKNOWN) return;
     
     printf("  BitmapInfoHeader:\n");
     printf("  Version:        %i\n", version);
@@ -596,6 +607,7 @@ log_bitmapinfo(BitmapInfoHeader* header, FILE* file) {
     BitmapInfo info = { .V1 = header };
     s32 version = bitmap_version(&info);
     u64 colorCount = bitmap_get_colorcount(info.Core);
+    if (version == BITMAP_VUNKNOWN) return;
     
     fprintf(file, "  BitmapInfoHeader:\n");
     fprintf(file, "  Version:        %i\n", version);
@@ -716,7 +728,7 @@ bitmap_load_core(FILE* file, s32* width, s32* height) {
         s32 pixelMask = power(2, info.core.BitCount) - 1;
         
         // NOTE: Jump to the offset only if non-zero
-        if (header.Offset)
+        if (header.Offset > 0)
             fseek(file, header.Offset, SEEK_SET);
         fread(pixelData, sizeof(u08), dataSize, file);
         
@@ -837,7 +849,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         BitmapInfoV4Header v4;
         BitmapInfoV5Header v5;
     } info;
-    bitmap_read_info(&header, &info.core, file);
+    if (!bitmap_read_info(&header, &info.core, file))
+        return NULL;
     
     // TODO: Temporary
     display_bitmapinfo(&info.v1);
@@ -848,17 +861,46 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         return bitmap_load_core(file, width, height);
     }
     
+    // NOTE: File size is used to check offsets
+    u64 currentPos = ftell(file);
+    fseek(file, 0l, SEEK_END);
+    u64 fileSize = ftell(file) - currentPos;
+    fseek(file, currentPos, SEEK_SET);
+    if (fileSize == 0) return NULL;
+    
+    // NOTE: For unknown version assume v1
+    if (version == BITMAP_VUNKNOWN)
+        info.v1.Size = sizeof(BitmapInfoHeader), version = 1;
+    
     // NOTE: Assuming negative width is an error, we take the absolute width
     if (info.v1.Width < 0)
         info.v1.Width = ABS(info.v1.Width);
     
+    // NOTE: Invalid (0) height and/or width
+    if (!info.v1.Width || !info.v1.Height)
+        return NULL;
+    
     *width = info.v1.Width;
     *height = ABS(info.v1.Height);
+    
+    // NOTE: Check the height and width are valid (the number of pixels needed should not be larger than what can be stored in  a u32, since u32 stors the SizeImage field)
+    // NOTE: This is a lower bound for the amount of bytes needed, since it does not account for padding.
+    u64 pixelsNeeded = ((u64) *width) * ((u64) *height) * sizeof(RgbQuad);
+    if (pixelsNeeded > 0xFFFFFFFF)
+        return NULL;
     
     // NOTE: Bad bitcount, calculate it from Width and SizeImage according to formula
     if (!(info.v1.BitCount ==  1 || info.v1.BitCount ==  2 || info.v1.BitCount ==  4 || info.v1.BitCount ==  8 || info.v1.BitCount == 16 || info.v1.BitCount == 24 || info.v1.BitCount == 32)) {
         info.v1.BitCount = (u16) ((32 * ((info.v1.SizeImage / (info.v1.Height * 4)) - (31 / 32))) / info.v1.Width);
     }
+    
+    
+    // NOTE: Correct invalid RLE4/8 and BitCount values
+    // If the bitcount does not match the compression mode correct the compression mode so it does
+    if (info.v1.Compression == BI_RLE4 && info.v1.BitCount == 8)
+        info.v1.Compression = BI_RLE8;
+    if (info.v1.Compression == BI_RLE8 && info.v1.BitCount == 4)
+        info.v1.Compression = BI_RLE4;
     
     // NOTE: Rows are fit to a DWORD (4 byte) boundary (32 is BPP of output, 31 is bpp - 1 bit)
     u32 rowLength = (u32) (floor((info.v1.BitCount * info.v1.Width + 31.0) / 32.0) * 4);
@@ -870,31 +912,46 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         dataSize = info.v1.SizeImage;
     
     // NOTE: If row is negative image is in the oposite direction, so reverse this point
-    u08* resultData = malloc(info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
+    u64 resultSize = info.v1.Width * ABS(info.v1.Height);
+    u08* resultData = malloc(resultSize * sizeof(RgbQuad));
     RgbQuad* resultRgb = (RgbQuad*) resultData;
     
+    // NOTE: Set default values
+    // TODO: Ignore for performance?
+    for (u64 i = 0; i < resultSize; i++)
+        resultRgb[i].Value = 0x00000000;
+    
     if (!*width || !*height)
-        return resultData;
+        return NULL;
     
     u08* inputData = malloc(dataSize);
     u08* pixelData = inputData;
     
     // NOTE: No compression, using palette
     if (info.v1.BitCount < 16 && info.v1.Compression == BI_RGB) {
+        default_compression:
+        
         info.v1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
         u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
-        colorCount = colorCount == 0 ? maxColorCount : colorCount;
+        //colorCount = colorCount == 0 ? maxColorCount : colorCount;
+        
+        // NOTE: If no palette, return data as is (transparent image of the given size)
+        // TODO: Use a default palette?
+        if (!colorCount)
+            return NULL;
         
         RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
-        fread(colors, sizeof(RgbQuad), colorCount, file);
+        u64 colorsRead = fread(colors, sizeof(RgbQuad), colorCount, file);
+        if (colorsRead != colorCount)
+            return NULL;
         
         s32 pixelMask = power(2, info.v1.BitCount) - 1;
         
         // NOTE: Jump to the offset only if non-zero
-        if (header.Offset)
+        if (header.Offset && header.Offset < fileSize)
             fseek(file, header.Offset, SEEK_SET);
-        fread(pixelData, sizeof(u08), dataSize, file);
+        u64 read = fread(pixelData, sizeof(u08), dataSize, file);
         
         // NOTE: Number of columns in the image (width in bytes)
         s32 columns = rowLength - rowOffset;
@@ -904,8 +961,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         remainingBits = remainingBits == 0 ? 8 : remainingBits;
         
         // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
-        for (s32 row = 0; row < ABS(info.v1.Height); row++) {
-            for (s32 column = 0; column < columns; column++) {
+        for (s32 row = 0; row < ABS(info.v1.Height) && pixelData - inputData < read; row++) {
+            for (s32 column = 0; column < columns && pixelData - inputData < read; column++) {
                 // NOTE: Amount of colors / pixels in each byte (differs for the last byte depending on pixel width)
                 // Extra shift is the extra shift used for the last byte (since data is stored little endian)
                 s32 colorsInByte = (column + 1 == columns ? remainingBits : 8) / info.v1.BitCount;
@@ -918,9 +975,12 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     
                     // NOTE: If index is outside the palette use the first color in palette
                     // TODO: Use the first, last, or black?
-                    if (pixelValue > colorCount)
-                        pixelValue = 0;
-                    RgbQuad color = *(colors + pixelValue);
+                    RgbQuad color;
+                    if (pixelValue + 1 > colorCount) {
+                        color.Value = 0xFF000000;
+                    }
+                    else
+                        color = *(colors + pixelValue);
                     
                     // NOTE: In color tables alpha is inverted (for some odd reason?)
                     *resultRgb = color;
@@ -937,13 +997,13 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     // NOTE: BI_RGB
     else if (info.v1.Compression == BI_RGB) {
         // NOTE: Jump to the offset only if non-zero
-        if (header.Offset)
+        if (header.Offset && header.Offset < fileSize)
             fseek(file, header.Offset, SEEK_SET);
-        fread(pixelData, sizeof(u08), dataSize, file);
+        u64 read = fread(pixelData, sizeof(u08), dataSize, file);
         
         s32 columns = (rowLength - rowOffset) / (info.v1.BitCount / 8);
-        for (s32 row = 0; row < ABS(info.v1.Height); row++) {
-            for (s32 column = 0; column < columns; column++) {
+        for (s32 row = 0; row < ABS(info.v1.Height) && pixelData - inputData < read; row++) {
+            for (s32 column = 0; column < columns && pixelData - inputData < read; column++) {
                 if (info.v1.BitCount == 16) {
                     RgbDouble pixel = *((RgbDouble*) pixelData);
                     resultRgb->Red   = MAP(pixel.Red, 5);
@@ -992,14 +1052,18 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         
         // NOTE: While v1 bitmaps have no fields for RGB bitmasks they come right after the info header,
         // for convenience we read them into the fields of the v2 header.
-        if (version == 1)
-            fread(&info.v2.RedMask, sizeof(u32), 3, file);
-        if (version == 1 && info.v1.Compression == BI_ALPHABITFIELDS)
-            fread(&info.v3.AlphaMask, sizeof(u32), 1, file);
+        if (version == 1) {
+            u64 read = fread(&info.v2.RedMask, sizeof(u32), 3, file);
+            if (read != 3) return NULL;
+        }
+        if (version == 1 && info.v1.Compression == BI_ALPHABITFIELDS) {
+            u64 read = fread(&info.v3.AlphaMask, sizeof(u32), 1, file);
+            if (read != 1) return NULL;
+        }
         
-        if (header.Offset)
+        if (header.Offset && header.Offset < fileSize)
             fseek(file, header.Offset, SEEK_SET);
-        fread(pixelData, sizeof(u08), dataSize, file);
+        u64 read = fread(pixelData, sizeof(u08), dataSize, file);
         
         // NOTE: Amount to shift the result to properly align the first bit
         u32 redShift, greenShift, blueShift, alphaShift = 0;
@@ -1020,8 +1084,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         }
         
         s32 columns = (rowLength - rowOffset) / (info.v1.BitCount / 8);
-        for (s32 row = 0; row < ABS(info.v1.Height); row++) {
-            for (s32 column = 0; column < columns; column++) {
+        for (s32 row = 0; row < ABS(info.v1.Height) && pixelData - inputData < read; row++) {
+            for (s32 column = 0; column < columns && pixelData - inputData < read; column++) {
                 u32 pixelValue = 0x00;
                 
                 s32 totalBytes = info.v1.BitCount / 8;
@@ -1049,25 +1113,26 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         info.v1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
         u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
-        colorCount = colorCount == 0 ? maxColorCount : colorCount;
+        //colorCount = colorCount == 0 ? maxColorCount : colorCount;
+        
+        // NOTE: If no palette, return data as is (transparent image of the given size)
+        // TODO: Use a default palette?
+        if (!colorCount)
+            return NULL;
         
         RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
-        fread(colors, sizeof(RgbQuad), colorCount, file);
+        u64 colorsRead = fread(colors, sizeof(RgbQuad), colorCount, file);
+        if (colorsRead != colorCount)
+            return NULL;
         
-        if (header.Offset)
+        if (header.Offset && header.Offset < fileSize)
             fseek(file, header.Offset, SEEK_SET);
-        fread(pixelData, sizeof(u08), dataSize, file);
-        
-        // NOTE: Set all pixels to 0 (in case RLE only writes to half the pixels before stopping)
-        // TODO: Should this be black or transparent, currently we use transparent? Or should we use the default color from the palette used elsewhere?
-        RgbQuad* rgb = resultRgb;
-        u32 resultSize = info.v1.Width * ABS(info.v1.Height);
-        memset(resultRgb, 0x00, info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
+        u64 read = fread(pixelData, sizeof(u08), dataSize, file);
         RgbQuad* rgbStart = resultRgb;
         
         s32 x = 0, y = 0;
         s08 absoluteMode = 0;
-        for (u32 pos = 0; (pixelData - inputData) < dataSize && (resultRgb - rgb + 2) <= resultSize; pos++) {
+        for (u32 pos = 0; (pixelData - inputData) < dataSize && (resultRgb - rgbStart + 2) <= resultSize && pixelData - inputData < read; pos++) {
             u08 word = *pixelData++;
             u08 value = *pixelData++;
             
@@ -1148,25 +1213,26 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         info.v1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
         u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
-        colorCount = colorCount == 0 ? maxColorCount : colorCount;
+        //colorCount = colorCount == 0 ? maxColorCount : colorCount;
+        
+        // NOTE: If no palette, return data as is (transparent image of the given size)
+        // TODO: Use a default palette?
+        if (!colorCount)
+            return NULL;
         
         RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
-        fread(colors, sizeof(RgbQuad), colorCount, file);
+        u64 colorsRead = fread(colors, sizeof(RgbQuad), colorCount, file);
+        if (colorsRead != colorCount)
+            return NULL;
         
-        if (header.Offset)
+        if (header.Offset && header.Offset < fileSize)
             fseek(file, header.Offset, SEEK_SET);
-        fread(pixelData, sizeof(u08), dataSize, file);
-        
-        // NOTE: Set all pixels to 0 (in case RLE only writes to half the pixels before stopping)
-        // TODO: Should this be black or transparent, currently we use transparent? Or should we use the default color from the palette used elsewhere?
-        RgbQuad* rgb = resultRgb;
-        u32 resultSize = info.v1.Width * ABS(info.v1.Height);
-        memset(resultRgb, 0x00, info.v1.Width * ABS(info.v1.Height) * sizeof(RgbQuad));
+        u64 read = fread(pixelData, sizeof(u08), dataSize, file);
         RgbQuad* rgbStart = resultRgb;
         
         s32 x = 0, y = 0;
         s08 absoluteMode = 0;
-        for (u32 pos = 0; (pixelData - inputData) < dataSize && (resultRgb - rgb + 2) <= resultSize; pos++) {
+        for (u32 pos = 0; (pixelData - inputData) < dataSize && (resultRgb - rgbStart + 2) <= resultSize && pixelData - inputData < read; pos++) {
             u08 word = *pixelData++;
             u08 value = *pixelData++;
             
@@ -1224,6 +1290,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         }
         
         free(colors);
+    }
+    else {
+        goto default_compression;
     }
     
     // NOTE: Invert the bitmap if top-down
