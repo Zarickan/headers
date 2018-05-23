@@ -862,9 +862,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     }
     
     // NOTE: File size is used to check offsets
-    u64 currentPos = ftell(file);
+    s64 currentPos = ftell(file);
     fseek(file, 0l, SEEK_END);
-    u64 fileSize = ftell(file) - currentPos;
+    s64 fileSize = ftell(file) - currentPos;
     fseek(file, currentPos, SEEK_SET);
     if (fileSize == 0) return NULL;
     
@@ -906,18 +906,17 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     u32 rowLength = (u32) (floor((info.v1.BitCount * info.v1.Width + 31.0) / 32.0) * 4);
     u32 rowOffset = (u32) (rowLength - ceil(info.v1.Width * info.v1.BitCount / 8.0));
     u32 dataSize = rowLength * ABS(info.v1.Height);
-    
-    // TODO: Could it be possible to calculate SizeImage, or read it from the fil? Should this field somehow be invalid/corrupt
+
+    // NOTE: We cannot calculate the raw size of any image compressed with RLE and have to rely on the size specified in the info
     if (info.v1.Compression == BI_RLE4 || info.v1.Compression == BI_RLE8)
         dataSize = info.v1.SizeImage;
     
-    // NOTE: If row is negative image is in the oposite direction, so reverse this point
+    // NOTE: If row is negative image is in the opposite direction, so reverse this point
     u64 resultSize = info.v1.Width * ABS(info.v1.Height);
     u08* resultData = malloc(resultSize * sizeof(RgbQuad));
     RgbQuad* resultRgb = (RgbQuad*) resultData;
     
-    // NOTE: Set default values
-    // TODO: Ignore for performance?
+    // NOTE: Set all pixels in output to black
     for (u64 i = 0; i < resultSize; i++)
         resultRgb[i].Value = 0xFF000000;
     
@@ -929,8 +928,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     
     // NOTE: No compression, using palette
     if (info.v1.BitCount < 16 && info.v1.Compression == BI_RGB) {
-        default_compression:
-        
         info.v1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.v1.BitCount * info.v1.Planes);
         u32 colorCount = MIN(info.v1.UsedColors, maxColorCount);
@@ -976,8 +973,8 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                     // NOTE: If index is outside the palette use the first color in palette
                     // TODO: Use the first, last, or black?
                     RgbQuad color;
-                    if (pixelValue + 1 > colorCount) {
-                        color.Value = 0xFF000000;
+                    if (pixelValue >= colorCount) {
+                        color.Value = 0x00000000;
                     }
                     else
                         color = *(colors + pixelValue);
@@ -1266,7 +1263,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             if(!absoluteMode) {
                 for (u08 count = 0; count < word; count++) {
                     RgbQuad color = *(colors + value);
-                    
+
                     *resultRgb = color;
                     resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
                     resultRgb++;
@@ -1277,7 +1274,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                 for (u08 count = 0; count < value; count++) {
                     RgbQuad color = *(colors + *pixelData);
                     pixelData++;
-                    
+
                     *resultRgb = color;
                     resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
                     resultRgb++;
@@ -1290,9 +1287,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         }
         
         free(colors);
-    }
-    else {
-        goto default_compression;
     }
     
     // NOTE: Invert the bitmap if top-down
