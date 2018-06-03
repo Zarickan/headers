@@ -466,7 +466,7 @@ bitmap_free(Bitmap* bitmap) {
 }
 
 static inline void
-write_bitmap_to_file(Bitmap* bitmap, FILE* file) {
+bitmap_write(Bitmap* bitmap, FILE* file) {
     assert(bitmap->Info.V1.Size != 0);
     fwrite(&bitmap->Header, sizeof(BitmapHeader), 1, file);
     fwrite(&bitmap->Info.V1, bitmap->Info.V1.Size, 1, file);
@@ -1031,7 +1031,7 @@ bitmap_save(FILE* file, s32 width, s32 height, const u08* data) {
         outputData += rowOffset;
     }
     
-    write_bitmap_to_file(&bitmap, file);
+    bitmap_write(&bitmap, file);
     free(bitmap.Data.Bytes);
 }
 
