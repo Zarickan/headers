@@ -536,6 +536,13 @@ bitmap_log_metadata(BitmapInfo* info, FILE* file) {
     }
 }
 
+RgbQuad palette_black = { .Value = 0x00000000 };
+static inline RgbQuad*
+palette_color(RgbQuad* palette, u32 paletteSize, u32 color) {
+    if (color + 1 > paletteSize) return &palette_black;
+    return palette + color;
+}
+
 static inline u08*
 bitmap_load(FILE* file, s32* width, s32* height) {
     BitmapHeader header;
@@ -626,12 +633,11 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     u08* inputData = malloc(dataSize);
     u08* pixelData = inputData;
     
-    // NOTE: No compression, using palette
-    if (info.V1.BitCount < 16 && info.V1.Compression == BI_RGB) {
+    // NOTE: Compression methods using a paletteusing a palette
+    if ((info.V1.Compression == BI_RGB && info.V1.BitCount < 16) || info.V1.Compression == BI_RLE4 || info.V1.Compression == BI_RLE8) {
         info.V1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.V1.BitCount * info.V1.Planes);
         u32 colorCount = MIN(info.V1.UsedColors, maxColorCount);
-        //colorCount = colorCount == 0 ? maxColorCount : colorCount;
         
         // NOTE: If no palette, return data as is (transparent image of the given size)
         // TODO: Use a default palette?
@@ -643,50 +649,181 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         if (colorsRead != colorCount)
             return NULL;
         
-        s32 pixelMask = power(2, info.V1.BitCount) - 1;
-        
         // NOTE: Jump to the offset only if non-zero
         if (header.Offset && header.Offset < fileSize)
             fseek(file, header.Offset, SEEK_SET);
         u64 read = fread(pixelData, sizeof(u08), dataSize, file);
         
-        // NOTE: Number of columns in the image (width in bytes)
-        s32 columns = rowLength - rowOffset;
-        
-        // NOTE: Number of "spare" bits at the end of the last byte in each row
-        s32 remainingBits = info.V1.Width * info.V1.BitCount % 8;
-        remainingBits = remainingBits == 0 ? 8 : remainingBits;
-        
-        // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
-        for (s32 row = 0; row < ABS(info.V1.Height) && pixelData - inputData < read; row++) {
-            for (s32 column = 0; column < columns && pixelData - inputData < read; column++) {
-                // NOTE: Amount of colors / pixels in each byte (differs for the last byte depending on pixel width)
-                // Extra shift is the extra shift used for the last byte (since data is stored little endian)
-                s32 colorsInByte = (column + 1 == columns ? remainingBits : 8) / info.V1.BitCount;
-                s32 extraShift  = (column + 1 == columns ? 8 / info.V1.BitCount - colorsInByte : 0);
-                
-                for(s32 bit = colorsInByte - 1; bit >= 0; bit--) {
-                    s32 mask = (pixelMask << (bit + extraShift) * info.V1.BitCount);
-                    s32 shift = (bit + extraShift) * info.V1.BitCount;
-                    s32 pixelValue = (*pixelData & mask) >> shift;
+        // NOTE: No compression, using palette
+        if (info.V1.Compression == BI_RGB) {
+            s32 pixelMask = power(2, info.V1.BitCount) - 1;
+            
+            // NOTE: Number of columns in the image (width in bytes)
+            s32 columns = rowLength - rowOffset;
+            
+            // NOTE: Number of "spare" bits at the end of the last byte in each row
+            s32 remainingBits = info.V1.Width * info.V1.BitCount % 8;
+            remainingBits = remainingBits == 0 ? 8 : remainingBits;
+            
+            // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
+            for (s32 row = 0; row < ABS(info.V1.Height) && pixelData - inputData < read; row++) {
+                for (s32 column = 0; column < columns && pixelData - inputData < read; column++) {
+                    // NOTE: Amount of colors / pixels in each byte (differs for the last byte depending on pixel width)
+                    // Extra shift is the extra shift used for the last byte (since data is stored little endian)
+                    s32 colorsInByte = (column + 1 == columns ? remainingBits : 8) / info.V1.BitCount;
+                    s32 extraShift  = (column + 1 == columns ? 8 / info.V1.BitCount - colorsInByte : 0);
                     
-                    // NOTE: If index is outside the palette use the first color in palette
-                    // TODO: Use the first, last, or black?
-                    RgbQuad color;
-                    if (pixelValue >= colorCount) {
-                        color.Value = 0x00000000;
+                    for(s32 bit = colorsInByte - 1; bit >= 0; bit--) {
+                        s32 mask = (pixelMask << (bit + extraShift) * info.V1.BitCount);
+                        s32 shift = (bit + extraShift) * info.V1.BitCount;
+                        s32 pixelValue = (*pixelData & mask) >> shift;
+                        RgbQuad color = *palette_color(colors, colorCount, pixelValue);
+                        
+                        // NOTE: In color tables alpha is inverted (for some odd reason?)
+                        *resultRgb = color;
+                        resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
+                        resultRgb++;
                     }
-                    else
-                        color = *(colors + pixelValue);
-                    
-                    // NOTE: In color tables alpha is inverted (for some odd reason?)
-                    *resultRgb = color;
-                    resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
-                    resultRgb++;
+                    pixelData++;
                 }
-                pixelData++;
+                pixelData += rowOffset;
             }
-            pixelData += rowOffset;
+        }
+        // NOTE: RLE4
+        else if (info.V1.Compression == BI_RLE4) {
+            RgbQuad* rgbStart = resultRgb;
+            
+            s32 x = 0, y = 0;
+            s08 absoluteMode = 0;
+            for (u32 pos = 0; (pixelData - inputData) < dataSize && (resultRgb - rgbStart + 2) <= resultSize && pixelData - inputData < read; pos++) {
+                u08 word = *pixelData++;
+                u08 value = *pixelData++;
+                
+                // NOTE: Control
+                if (word == 0x00) {
+                    switch (value) {
+                        case 0x00: { // End of line
+                            y++;
+                            x = 0;
+                            resultRgb = rgbStart + INDEX2D(x, y, *width);
+                            continue;
+                        }
+                        case 0x01: {// End of file
+                            // Setting this makes the for loop exit
+                            pos = dataSize;
+                            continue;
+                        }
+                        case 0x02: { // Delta
+                            x += *pixelData++;
+                            y += *pixelData++;
+                            resultRgb = rgbStart + INDEX2D(x, y, *width);
+                            continue;
+                        }
+                        default: { // Absolute marker
+                            absoluteMode = 1;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!absoluteMode) {
+                    u32 upper = (u32) word / 2 + word % 2;
+                    for (u08 count = 0; count < upper; count++) {
+                        *resultRgb = *palette_color(colors, colorCount, value & 0x0F);
+                        resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
+                        resultRgb++;
+                        x++;
+                        
+                        if (count == upper - 1 && word % 2 == 1)
+                            continue;
+                        
+                        *resultRgb = *palette_color(colors, colorCount, (value & 0xF0) >> 4);
+                        resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
+                        resultRgb++;
+                        x++;
+                    }
+                }
+                else {
+                    u32 upper = (u32) (value / 2 + value % 2);
+                    for (u08 count = 0; count < upper; count++) { // RLE4 has two per pixel
+                        u08 runData = *pixelData++;
+                        
+                        *resultRgb = *palette_color(colors, colorCount, (runData & 0xF0) >> 4);
+                        resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
+                        resultRgb++;
+                        x++;
+                        
+                        if (count == upper - 1 && value % 2 == 1)
+                            continue;
+                        
+                        *resultRgb = *palette_color(colors, colorCount, runData & 0x0F);
+                        resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
+                        resultRgb++;
+                        x++;
+                    }
+                    
+                    absoluteMode = 0;
+                    pixelData += (value / 2 + value % 2) % 2;
+                }
+            }
+        }
+        // NOTE: RLE8
+        else if (info.V1.Compression == BI_RLE8) {
+            RgbQuad* rgbStart = resultRgb;
+            
+            s32 x = 0, y = 0;
+            s08 absoluteMode = 0;
+            for (u32 pos = 0; (pixelData - inputData) < dataSize && (resultRgb - rgbStart + 2) <= resultSize && pixelData - inputData < read; pos++) {
+                u08 word = *pixelData++;
+                u08 value = *pixelData++;
+                
+                // NOTE: Control
+                if (word == 0x00) {
+                    switch (value) {
+                        case 0x00: {// End of line
+                            y++;
+                            x = 0;
+                            resultRgb = rgbStart + INDEX2D(x, y, *width);
+                            continue;
+                        }
+                        case 0x01: { // End of file
+                            // Setting this makes the for loop exit
+                            pos = dataSize;
+                            continue;
+                        }
+                        case 0x02: { // Delta
+                            x += *pixelData++;
+                            y += *pixelData++;
+                            resultRgb = rgbStart + INDEX2D(x, y, *width);
+                            continue;
+                        }
+                        default: { // Absolute marker
+                            absoluteMode = 1;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!absoluteMode) {
+                    for (u08 count = 0; count < word; count++) {
+                        *resultRgb = *palette_color(colors, colorCount, value);
+                        resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
+                        resultRgb++;
+                        x++;
+                    }
+                }
+                else {
+                    for (u08 count = 0; count < value; count++) {
+                        *resultRgb = *palette_color(colors, colorCount, *pixelData++);
+                        resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
+                        resultRgb++;
+                        x++;
+                    }
+                    
+                    absoluteMode = 0;
+                    pixelData += value % 2;
+                }
+            }
         }
         
         free(colors);
@@ -804,189 +941,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             }
             pixelData += rowOffset;
         }
-    }
-    // NOTE: RLE4
-    else if (info.V1.Compression == BI_RLE4) {
-        info.V1.Planes = 1; // NOTE: Planes should always be 1
-        u32 maxColorCount = power(2, info.V1.BitCount * info.V1.Planes);
-        u32 colorCount = MIN(info.V1.UsedColors, maxColorCount);
-        //colorCount = colorCount == 0 ? maxColorCount : colorCount;
-        
-        // NOTE: If no palette, return data as is (transparent image of the given size)
-        // TODO: Use a default palette?
-        if (!colorCount)
-            return NULL;
-        
-        RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
-        u64 colorsRead = fread(colors, sizeof(RgbQuad), colorCount, file);
-        if (colorsRead != colorCount)
-            return NULL;
-        
-        if (header.Offset && header.Offset < fileSize)
-            fseek(file, header.Offset, SEEK_SET);
-        u64 read = fread(pixelData, sizeof(u08), dataSize, file);
-        RgbQuad* rgbStart = resultRgb;
-        
-        s32 x = 0, y = 0;
-        s08 absoluteMode = 0;
-        for (u32 pos = 0; (pixelData - inputData) < dataSize && (resultRgb - rgbStart + 2) <= resultSize && pixelData - inputData < read; pos++) {
-            u08 word = *pixelData++;
-            u08 value = *pixelData++;
-            
-            // NOTE: Control
-            if (word == 0x00) {
-                switch (value) {
-                    case 0x00: { // End of line
-                        y++;
-                        x = 0;
-                        resultRgb = rgbStart + INDEX2D(x, y, *width);
-                        continue;
-                    }
-                    case 0x01: {// End of file
-                        // Setting this makes the for loop exit
-                        pos = dataSize;
-                        continue;
-                    }
-                    case 0x02: { // Delta
-                        x += *pixelData++;
-                        y += *pixelData++;
-                        resultRgb = rgbStart + INDEX2D(x, y, *width);
-                        continue;
-                    }
-                    default: { // Absolute marker
-                        absoluteMode = 1;
-                        break;
-                    }
-                }
-            }
-            
-            if(!absoluteMode) {
-                u32 upper = (u32) word / 2 + word % 2;
-                for (u08 count = 0; count < upper; count++) {
-                    *resultRgb = *(colors + (value & 0x0F));
-                    resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
-                    resultRgb++;
-                    x++;
-                    
-                    if (count == upper - 1 && word % 2 == 1)
-                        continue;
-                    
-                    *resultRgb = *(colors + ((value & 0xF0) >> 4));
-                    resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
-                    resultRgb++;
-                    x++;
-                }
-            }
-            else {
-                u32 upper = (u32) (value / 2 + value % 2);
-                for (u08 count = 0; count < upper; count++) { // RLE4 has two per pixel
-                    u08 runData = *pixelData++;
-                    
-                    RgbQuad color = *(colors + ((runData & 0xF0) >> 4));
-                    *resultRgb = color;
-                    resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
-                    resultRgb++;
-                    x++;
-                    
-                    if (count == upper - 1 && value % 2 == 1)
-                        continue;
-                    
-                    color = *(colors + (runData & 0x0F));
-                    *resultRgb = color;
-                    resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
-                    resultRgb++;
-                    x++;
-                }
-                
-                absoluteMode = 0;
-                pixelData += (value / 2 + value % 2) % 2;
-            }
-        }
-        
-        free(colors);
-    }
-    // NOTE: RLE8
-    else if (info.V1.Compression == BI_RLE8) {
-        info.V1.Planes = 1; // NOTE: Planes should always be 1
-        u32 maxColorCount = power(2, info.V1.BitCount * info.V1.Planes);
-        u32 colorCount = MIN(info.V1.UsedColors, maxColorCount);
-        //colorCount = colorCount == 0 ? maxColorCount : colorCount;
-        
-        // NOTE: If no palette, return data as is (transparent image of the given size)
-        // TODO: Use a default palette?
-        if (!colorCount)
-            return NULL;
-        
-        RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
-        u64 colorsRead = fread(colors, sizeof(RgbQuad), colorCount, file);
-        if (colorsRead != colorCount)
-            return NULL;
-        
-        if (header.Offset && header.Offset < fileSize)
-            fseek(file, header.Offset, SEEK_SET);
-        u64 read = fread(pixelData, sizeof(u08), dataSize, file);
-        RgbQuad* rgbStart = resultRgb;
-        
-        s32 x = 0, y = 0;
-        s08 absoluteMode = 0;
-        for (u32 pos = 0; (pixelData - inputData) < dataSize && (resultRgb - rgbStart + 2) <= resultSize && pixelData - inputData < read; pos++) {
-            u08 word = *pixelData++;
-            u08 value = *pixelData++;
-            
-            // NOTE: Control
-            if (word == 0x00) {
-                switch (value) {
-                    case 0x00: {// End of line
-                        y++;
-                        x = 0;
-                        resultRgb = rgbStart + INDEX2D(x, y, *width);
-                        continue;
-                    }
-                    case 0x01: { // End of file
-                        // Setting this makes the for loop exit
-                        pos = dataSize;
-                        continue;
-                    }
-                    case 0x02: { // Delta
-                        x += *pixelData++;
-                        y += *pixelData++;
-                        resultRgb = rgbStart + INDEX2D(x, y, *width);
-                        continue;
-                    }
-                    default: { // Absolute marker
-                        absoluteMode = 1;
-                        break;
-                    }
-                }
-            }
-            
-            if(!absoluteMode) {
-                for (u08 count = 0; count < word; count++) {
-                    RgbQuad color = *(colors + value);
-                    
-                    *resultRgb = color;
-                    resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
-                    resultRgb++;
-                    x++;
-                }
-            }
-            else {
-                for (u08 count = 0; count < value; count++) {
-                    RgbQuad color = *(colors + *pixelData);
-                    pixelData++;
-                    
-                    *resultRgb = color;
-                    resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
-                    resultRgb++;
-                    x++;
-                }
-                
-                absoluteMode = 0;
-                pixelData += value % 2;
-            }
-        }
-        
-        free(colors);
     }
     
     // NOTE: Invert the bitmap if top-down
