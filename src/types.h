@@ -14,9 +14,12 @@ typedef size_t size;
 typedef intptr_t intptr;
 typedef uintptr_t uintptr;
 
+// Math
 #define MIN(left, right) ((left) <= (right) ? (left) : (right))
 #define MAX(left, right) ((left) >= (left) ? (right) : (right))
 #define ABS(value) ((value) < 0 ? -(value) : (value))
+#define CLAMP(value, mn, mx) min(max((value), (mn)), (max))
+#define INDEX2D(x, y, w) ((y) * (w) + (x))
 
 // Integers
 typedef uint8_t  u8;
@@ -425,5 +428,25 @@ f32_8x_neq(f32_8x left, f32_8x right) {
 }
 
 #endif // AVX2
+
+// Math functions
+static inline u32
+power(u32 base, u32 power) {
+    if (power == 0) return 1;
+    
+    u32 result = base;;
+    for (u32 n = 1; n < power; n++)
+        result *= base;
+    
+    return result;
+}
+
+static inline u32
+setbits(u32 number)
+{
+    number -= number >> 1 & 0x55555555;
+    number = (number & 0x33333333) + (number >> 2 & 0x33333333);
+    return (((number + (number >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+}
 
 #endif // TYPES_H
