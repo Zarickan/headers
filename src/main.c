@@ -2,9 +2,56 @@
 #include <stdlib.h>
 #include "types.h"
 #include "bitmap.h"
+#include "gif.h"
+
+void gif_test(void) {
+    char* images[] = {
+        "gif_valid/sunflower.gif",
+        "gif_valid/small2.gif",
+        "gif_valid/morph.gif",
+        "gif_valid/newton.gif",
+        "gif_valid/oil.gif",
+        "gif_valid/fullcolor.gif",
+        "gif_valid/quilt.gif",
+        "gif_valid/globe.gif",
+    };
+    
+    char outputFile[500];
+    u16 imageCount = sizeof(images) / sizeof(char*);
+    for (u16 i = 0; i < imageCount; i++) {
+        strcpy(outputFile, "");
+        strcat(outputFile, "gif_output/");
+        strcat(outputFile,  strstr(images[i], "/") + 1);
+        strcat(outputFile, ".bmp");
+        
+        printf("\nImage: %s\n", images[i]);
+        
+        // I/O Files
+        FILE* input = fopen(images[i], "rb");
+        if (input == NULL) continue;
+        
+        // Load the pixel data from the bitmap
+        s32 width, height;
+        u08* data = gif_load(input, &width, &height);
+        
+        FILE* output = fopen(outputFile, "wb");
+        
+        // Save the bitmap to disk
+        if (data != NULL)
+            bitmap_save(output, width, height, data);
+        
+        fclose(input);
+        fclose(output);
+        free(data);
+    }
+    
+    exit(0);
+}
 
 int main(int argc, char** argv)
 {
+    gif_test();
+    
     // Input files
     char* images[] = {
         // Corrupt (technically corrupt, but we should manage)
@@ -248,7 +295,7 @@ int main(int argc, char** argv)
         strcat(outputFile, "test_output/");
         strcat(outputFile,  strstr(images[i], "/") + 1);
         
-        printf("Image: %s\n", images[i]);
+        printf("\nImage: %s\n", images[i]);
         
         // I/O Files
         FILE* input = fopen(images[i], "rb");
