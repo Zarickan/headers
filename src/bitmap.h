@@ -542,6 +542,181 @@ palette_color(RgbQuad* palette, u32 paletteSize, u32 color) {
     if (color + 1 > paletteSize) return &palette_black;
     return palette + color;
 }
+RgbTriple palette_black_core = { .Red = 0x00, .Green = 0x00, .Blue = 0x00 };
+static inline RgbTriple*
+palette_color_core(RgbTriple* palette, u32 paletteSize, u32 color) {
+    if (color + 1 > paletteSize) return &palette_black_core;
+    return palette + color;
+}
+
+static inline u08*
+bitmap_load_core(FILE* file, s64 fileSize, BitmapHeader* header, BitmapCoreHeader* core, s32* width, s32* height) {
+    // NOTE: Assuming negative width is an error, we take the absolute width
+    if (core->Width < 0)
+        core->Width = ABS(core->Width);
+    
+    // NOTE: Invalid (0) height and/or width
+    if (!core->Width || !core->Height)
+        return NULL;
+    
+    *width = core->Width;
+    *height = ABS(core->Height);
+    
+    // NOTE: Check the height and width are valid (the number of pixels needed should not be larger than what can be stored in  a u32, since u32 stores the SizeImage field)
+    // NOTE: This is a lower bound for the amount of bytes needed, since it does not account for padding.
+    u64 pixelsNeeded = ((u64) *width) * ((u64) *height) * sizeof(RgbTriple);
+    if (pixelsNeeded > 0xFFFFFFFF)
+        return NULL;
+    
+    // NOTE: Check that the bitcount is valid, technically Core only supports 1,4,8 and 24 bpp images, though we might as well support 16 bpp RGB and 2 bpp palette as well
+    if (!(core->BitCount ==  1 || core->BitCount ==  2 || core->BitCount ==  4 || core->BitCount ==  8 || core->BitCount == 16 || core->BitCount == 24)) {
+        return NULL;
+    }
+    
+    // NOTE: Rows are fit to a DWORD (4 byte) boundary (32 is BPP of output, 31 is bpp - 1 bit)
+    u32 rowLength = (u32) (floor((core->BitCount * core->Width + 31.0) / 32.0) * 4);
+    u32 rowOffset = (u32) (rowLength - ceil(core->Width * core->BitCount / 8.0));
+    u32 dataSize = rowLength * ABS(core->Height);
+    
+    // NOTE: If row is negative image is in the opposite direction, so reverse this point
+    u64 resultSize = core->Width * ABS(core->Height);
+    u08* resultData = malloc(resultSize * sizeof(RgbQuad));
+    RgbQuad* resultRgb = (RgbQuad*) resultData;
+    
+    // NOTE: Set all pixels in output to black
+    for (u64 i = 0; i < resultSize; i++)
+        resultRgb[i].Value = 0xFF000000;
+    
+    if (!*width || !*height)
+        return NULL;
+    
+    u08* inputData = malloc(dataSize);
+    u08* pixelData = inputData;
+    
+    // NOTE: Compression methods using a palette
+    if (core->BitCount < 16) {
+        core->Planes = 1; // NOTE: Planes should always be 1
+        u32 colorCount = power(2, core->BitCount * core->Planes);
+        
+        // NOTE: If no palette, return data as is (transparent image of the given size)
+        // TODO: Use a default palette?
+        if (!colorCount)
+            return NULL;
+        
+        RgbTriple* colors = malloc(sizeof(RgbTriple) * colorCount);
+        u64 colorsRead = fread(colors, sizeof(RgbTriple), colorCount, file);
+        if (colorsRead != colorCount)
+            return NULL;
+        
+        // NOTE: Jump to the offset only if non-zero
+        if (header->Offset && header->Offset < fileSize)
+            fseek(file, header->Offset, SEEK_SET);
+        u64 read = fread(pixelData, sizeof(u08), dataSize, file);
+        
+        // NOTE: Number of columns in the image (width in bytes)
+        s32 columns = rowLength - rowOffset;
+        
+        // NOTE: Number of "spare" bits at the end of the last byte in each row
+        s32 pixelMask = power(2, core->BitCount) - 1;
+        s32 remainingBits = core->Width * core->BitCount % 8;
+        remainingBits = remainingBits == 0 ? 8 : remainingBits;
+        
+        // NOTE: For each row, column (bytes) then for each pixel in the bytes (if bpp < 8)
+        for (s32 row = 0; row < ABS(core->Height) && pixelData - inputData < read; row++) {
+            for (s32 column = 0; column < columns && pixelData - inputData < read; column++) {
+                // NOTE: Amount of colors / pixels in each byte (differs for the last byte depending on pixel width)
+                // Extra shift is the extra shift used for the last byte (since data is stored little endian)
+                s32 colorsInByte = (column + 1 == columns ? remainingBits : 8) / core->BitCount;
+                s32 extraShift  = (column + 1 == columns ? 8 / core->BitCount - colorsInByte : 0);
+                
+                for(s32 bit = colorsInByte - 1; bit >= 0; bit--) {
+                    s32 mask = (pixelMask << (bit + extraShift) * core->BitCount);
+                    s32 shift = (bit + extraShift) * core->BitCount;
+                    s32 pixelValue = (*pixelData & mask) >> shift;
+                    RgbTriple color = *palette_color_core(colors, colorCount, pixelValue);
+                    
+                    // NOTE: In color tables alpha is inverted (for some odd reason?)
+                    resultRgb->Red = color.Red;
+                    resultRgb->Green = color.Green;
+                    resultRgb->Blue = color.Blue;
+                    resultRgb->Alpha = (u08) (0xFF - resultRgb->Alpha);
+                    resultRgb++;
+                }
+                pixelData++;
+            }
+            pixelData += rowOffset;
+        }
+        
+        free(colors);
+    }
+    else {
+        // NOTE: Jump to the offset only if non-zero
+        if (header->Offset && header->Offset < fileSize)
+            fseek(file, header->Offset, SEEK_SET);
+        u64 read = fread(pixelData, sizeof(u08), dataSize, file);
+        
+        s32 columns = (rowLength - rowOffset) / (core->BitCount / 8);
+        for (s32 row = 0; row < ABS(core->Height) && pixelData - inputData < read; row++) {
+            for (s32 column = 0; column < columns && pixelData - inputData < read; column++) {
+                if (core->BitCount == 16) {
+                    RgbDouble pixel = *((RgbDouble*) pixelData);
+                    resultRgb->Red   = MAPRGBBYTE(pixel.Red, 5);
+                    resultRgb->Green = MAPRGBBYTE(pixel.Green, 5);
+                    resultRgb->Blue  = MAPRGBBYTE(pixel.Blue, 5);
+                    resultRgb->Alpha = (u08) (pixel.Alpha ? 0x00 : 0xFF);
+                    // TODO: Currently supports alpha for bitmaps of versions that do _NOT_ support alpha,
+                    // primarily v1 and v2 bitmaps. Should this feature be kept?
+                    // Or only "enabled" when the version supports alpha/transparency?
+                    
+                    pixelData += sizeof(RgbDouble);
+                }
+                
+                else if(core->BitCount  == 24) {
+                    RgbTriple pixel = *((RgbTriple*) pixelData);
+                    resultRgb->Red   = pixel.Red;
+                    resultRgb->Green = pixel.Green;
+                    resultRgb->Blue  = pixel.Blue;
+                    resultRgb->Alpha = 0xFF;
+                    
+                    pixelData += sizeof(RgbTriple);
+                }
+                else if (core->BitCount == 32) {
+                    RgbQuad pixel = *((RgbQuad*) pixelData);
+                    resultRgb->Red   = pixel.Red;
+                    resultRgb->Green = pixel.Green;
+                    resultRgb->Blue  = pixel.Blue;
+                    resultRgb->Alpha = (u08) (0xFF - pixel.Alpha);
+                    // NOTE: Alpha is inverted, like with palette images
+                    
+                    pixelData += sizeof(RgbQuad);
+                }
+                
+                resultRgb++;
+            }
+            pixelData += rowOffset;
+        }
+    }
+    
+    // NOTE: Invert the bitmap if top-down
+    if (core->Height < 0) {
+        u32* dataDWords = (u32*) resultData;
+        for (s32 row = 0; row < (*height) / 2; row++) {
+            for (s32 column = 0; column < (*width); column++) {
+                s32 srcWord = (*width) * row + column;
+                s32 tgtWord = (*width) * ((*height) - row - 1) + column;
+                
+                dataDWords[srcWord] ^= dataDWords[tgtWord];
+                dataDWords[tgtWord] ^= dataDWords[srcWord];
+                dataDWords[srcWord] ^= dataDWords[tgtWord];
+            }
+        }
+    }
+    
+    if (inputData)
+        free(inputData);
+    
+    return resultData;
+}
 
 static inline u08*
 bitmap_load(FILE* file, s32* width, s32* height) {
@@ -560,20 +735,18 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     
     bitmap_display_metadata(&info);
     
-    // NOTE: Core bitmaps have a different info header, so we handle them seperately
-    s32 version = bitmap_version(&info);
-    if (version == BITMAP_VCORE) {
-        //return bitmap_load_core(file, width, height);
-        // TODO: Load core bitmaps
-        return NULL;
-    }
-    
     // NOTE: File size is used to check offsets
     s64 currentPos = ftell(file);
     fseek(file, 0l, SEEK_END);
     s64 fileSize = ftell(file) - currentPos;
     fseek(file, currentPos, SEEK_SET);
     if (fileSize == 0) return NULL;
+    
+    // NOTE: Core bitmaps have a different info header, so we handle them seperately
+    s32 version = bitmap_version(&info);
+    if (version == BITMAP_VCORE) {
+        return bitmap_load_core(file, fileSize, &header, &info.Core, width, height);
+    }
     
     // NOTE: For unknown version assume v1
     if (version == BITMAP_VUNKNOWN)
@@ -590,7 +763,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     *width = info.V1.Width;
     *height = ABS(info.V1.Height);
     
-    // NOTE: Check the height and width are valid (the number of pixels needed should not be larger than what can be stored in  a u32, since u32 stors the SizeImage field)
+    // NOTE: Check the height and width are valid (the number of pixels needed should not be larger than what can be stored in  a u32, since u32 stores the SizeImage field)
     // NOTE: This is a lower bound for the amount of bytes needed, since it does not account for padding.
     u64 pixelsNeeded = ((u64) *width) * ((u64) *height) * sizeof(RgbQuad);
     if (pixelsNeeded > 0xFFFFFFFF)
@@ -600,7 +773,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     if (!(info.V1.BitCount ==  1 || info.V1.BitCount ==  2 || info.V1.BitCount ==  4 || info.V1.BitCount ==  8 || info.V1.BitCount == 16 || info.V1.BitCount == 24 || info.V1.BitCount == 32)) {
         info.V1.BitCount = (u16) ((32 * ((info.V1.SizeImage / (info.V1.Height * 4)) - (31 / 32))) / info.V1.Width);
     }
-    
     
     // NOTE: Correct invalid RLE4/8 and BitCount values
     // If the bitcount does not match the compression mode correct the compression mode so it does
@@ -633,7 +805,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     u08* inputData = malloc(dataSize);
     u08* pixelData = inputData;
     
-    // NOTE: Compression methods using a paletteusing a palette
+    // NOTE: Compression methods using a palette
     if ((info.V1.Compression == BI_RGB && info.V1.BitCount < 16) || info.V1.Compression == BI_RLE4 || info.V1.Compression == BI_RLE8) {
         info.V1.Planes = 1; // NOTE: Planes should always be 1
         u32 maxColorCount = power(2, info.V1.BitCount * info.V1.Planes);
