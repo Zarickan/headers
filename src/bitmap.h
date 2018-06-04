@@ -10,10 +10,10 @@
 
 // Helpers
 #define DPI(pixels_per_meter) ((u32) 39.37008 * (pixels_per_meter))
-#define MAP(v, wordSize) (u08) ((v) / (pow(2, (wordSize)) - 1) * 255)
+#define MAPRGBBYTE(v, wordSize) (u08) ((v) / (pow(2, (wordSize)) - 1) * 255)
 
 // Bitmap versions
-#define BITMAP_VUNKNOWN 0xFF
+#define BITMAP_VUNKNOWN 0xFFFFFFFF // -1
 #define BITMAP_VCORE    0x00
 #define BITMAP_V0       BITMAP_VCORE
 #define BITMAP_V1       0x01
@@ -234,7 +234,7 @@ typedef struct Bitmap {
     } Data;
 } Bitmap;
 
-static inline u08
+static inline s32
 bitmap_version(BitmapInfo* info) {
     switch(info->V1.Size) {
         case sizeof(BitmapCoreHeader):
@@ -561,7 +561,7 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     bitmap_display_metadata(&info);
     
     // NOTE: Core bitmaps have a different info header, so we handle them seperately
-    u32 version = bitmap_version(&info);
+    s32 version = bitmap_version(&info);
     if (version == BITMAP_VCORE) {
         //return bitmap_load_core(file, width, height);
         // TODO: Load core bitmaps
@@ -840,9 +840,9 @@ bitmap_load(FILE* file, s32* width, s32* height) {
             for (s32 column = 0; column < columns && pixelData - inputData < read; column++) {
                 if (info.V1.BitCount == 16) {
                     RgbDouble pixel = *((RgbDouble*) pixelData);
-                    resultRgb->Red   = MAP(pixel.Red, 5);
-                    resultRgb->Green = MAP(pixel.Green, 5);
-                    resultRgb->Blue  = MAP(pixel.Blue, 5);
+                    resultRgb->Red   = MAPRGBBYTE(pixel.Red, 5);
+                    resultRgb->Green = MAPRGBBYTE(pixel.Green, 5);
+                    resultRgb->Blue  = MAPRGBBYTE(pixel.Blue, 5);
                     resultRgb->Alpha = (u08) (pixel.Alpha ? 0x00 : 0xFF);
                     // TODO: Currently supports alpha for bitmaps of versions that do _NOT_ support alpha,
                     // primarily v1 and v2 bitmaps. Should this feature be kept?
@@ -933,10 +933,10 @@ bitmap_load(FILE* file, s32* width, s32* height) {
                 u32 blue = (pixelValue & info.V2.BlueMask) >> blueShift;
                 u32 alpha = !hasAlpha ? 0 : ((pixelValue & info.V3.AlphaMask) >> alphaShift);
                 
-                resultRgb->Red   = MAP(red, redBits);
-                resultRgb->Green = MAP(green, greenBits);
-                resultRgb->Blue  = MAP(blue, blueBits);
-                resultRgb->Alpha = (u08) (hasAlpha ? MAP(alpha, alphaBits) : 0xFF);
+                resultRgb->Red   = MAPRGBBYTE(red, redBits);
+                resultRgb->Green = MAPRGBBYTE(green, greenBits);
+                resultRgb->Blue  = MAPRGBBYTE(blue, blueBits);
+                resultRgb->Alpha = (u08) (hasAlpha ? MAPRGBBYTE(alpha, alphaBits) : 0xFF);
                 resultRgb++;
             }
             pixelData += rowOffset;
