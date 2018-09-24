@@ -34,7 +34,9 @@
 #define BI_CYKRLE8        0x0C
 #define BI_CYKRLE4        0x0D
 
+// NOTE (Frederi): Since these represent data on disc we do not want them packed by the compiler
 #pragma pack(push,1)
+// RGB Pixel structs
 typedef union RgbDouble {
     u16 Value;
     struct {
@@ -61,6 +63,7 @@ typedef union RgbQuad {
     };
 } RgbQuad;
 
+// CIEXYZ color profiles
 typedef u32 FXPT2DOT30;
 typedef struct CIEXYZ {
     FXPT2DOT30 X;
@@ -74,6 +77,7 @@ typedef struct CIETriple {
     CIEXYZ Blue;
 } CIETriple;
 
+// Bitmap file header
 typedef struct BitmapHeader {
     union {
         u16 Id;
@@ -84,6 +88,7 @@ typedef struct BitmapHeader {
     u32 Offset;
 } BitmapHeader;
 
+// Bitmap image headers
 typedef struct BitmapCoreHeader {
     u32 Size;
     s16 Width;
@@ -214,6 +219,7 @@ typedef struct BitmapInfoV5Header {
 
 #pragma pack(pop)
 
+// Bitmap image geader union
 typedef union BitmapInfo {
     BitmapCoreHeader Core;
     BitmapInfoV1Header V1;
@@ -223,6 +229,7 @@ typedef union BitmapInfo {
     BitmapInfoV5Header V5;
 } BitmapInfo;
 
+// Bitmap struct
 typedef struct Bitmap {
     BitmapHeader Header;
     BitmapInfo Info;
@@ -233,61 +240,6 @@ typedef struct Bitmap {
         RgbQuad*   Rgba;
     } Data;
 } Bitmap;
-
-static inline s32
-bitmap_version(BitmapInfo* info) {
-    switch(info->V1.Size) {
-        case sizeof(BitmapCoreHeader):
-        return BITMAP_V0;
-        
-        case sizeof(BitmapInfoHeader):
-        return BITMAP_V1;
-        
-        case sizeof(BitmapInfoV2Header):
-        return BITMAP_V2;
-        
-        case sizeof(BitmapInfoV3Header):
-        return BITMAP_V3;
-        
-        case sizeof(BitmapInfoV4Header):
-        return BITMAP_V4;
-        
-        case sizeof(BitmapInfoV5Header):
-        return BITMAP_V5;
-        
-        default:
-        return BITMAP_VUNKNOWN;
-    }
-}
-
-static inline u64
-bitmap_colorcount(BitmapInfo* info) {
-    // TODO: Support for CORE bitmaps?
-    return (u64) pow(2, info->V1.BitCount * info->V1.Planes);
-}
-
-static inline s32
-bitmap_readinfo(BitmapHeader* header, BitmapInfo* info, FILE* file) {
-    u64 readHeader = fread(header, sizeof(BitmapHeader), 1, file);
-    u64 readCore = fread(info, sizeof(BitmapCoreHeader), 1, file);
-    
-    if (!readHeader || !readCore)
-        return 0;
-    
-    // NOTE: Read remaining fields depending on the bitmap version
-    u32 v0InfoSize = sizeof(BitmapCoreHeader);
-    if (info->V1.Size > v0InfoSize) {
-        u08* infoPtr = (u08*) info;
-        u32  infoSize = info->V1.Size - sizeof(BitmapCoreHeader);
-        assert(infoSize > 0);
-        
-        u64 readExtra = fread(infoPtr + v0InfoSize, sizeof(u08), infoSize, file);
-        if (readExtra != infoSize)
-            return 0;
-    }
-    
-    return 1;
-}
 
 static inline void
 bitmap_create_core(Bitmap* bitmap, s16 width, s16 height) {
@@ -465,31 +417,119 @@ bitmap_free(Bitmap* bitmap) {
     free(bitmap);
 }
 
-static inline void
-bitmap_write(Bitmap* bitmap, FILE* file) {
-    assert(bitmap->Info.V1.Size != 0);
-    fwrite(&bitmap->Header, sizeof(BitmapHeader), 1, file);
-    fwrite(&bitmap->Info.V1, bitmap->Info.V1.Size, 1, file);
-    
-    if (bitmap_version(&bitmap->Info) == BITMAP_VCORE) {
-        u32 size = (u32) (bitmap->Info.V1.Width * bitmap->Info.V1.Height * (bitmap->Info.V1.BitCount / 8));
+/*
+* Gets the version of the bitmap represented by the BitmapInfo header.
+* (This is based solely on the Size field of the header)
+*/
+static inline s32
+bitmap_version(BitmapInfo* info) {
+    switch(info->V1.Size) {
+        case sizeof(BitmapCoreHeader):
+        return BITMAP_V0;
         
-        fwrite(bitmap->Data.Bytes, sizeof(u08), size, file);
-        return;
+        case sizeof(BitmapInfoHeader):
+        return BITMAP_V1;
+        
+        case sizeof(BitmapInfoV2Header):
+        return BITMAP_V2;
+        
+        case sizeof(BitmapInfoV3Header):
+        return BITMAP_V3;
+        
+        case sizeof(BitmapInfoV4Header):
+        return BITMAP_V4;
+        
+        case sizeof(BitmapInfoV5Header):
+        return BITMAP_V5;
+        
+        default:
+        return BITMAP_VUNKNOWN;
     }
-    
-    fwrite(bitmap->Data.Bytes, sizeof(u08), bitmap->Info.V1.SizeImage, file);
+}
+static inline char*
+bitmap_version_string(BitmapInfo* info) {
+    switch(info->V1.Size) {
+        case sizeof(BitmapCoreHeader):
+        return "Core";
+        
+        case sizeof(BitmapInfoHeader):
+        return "version 1";
+        
+        case sizeof(BitmapInfoV2Header):
+        return "Version 2";
+        
+        case sizeof(BitmapInfoV3Header):
+        return "Version 3";
+        
+        case sizeof(BitmapInfoV4Header):
+        return "Version 4";
+        
+        case sizeof(BitmapInfoV5Header):
+        return "Version 5";
+        
+        default:
+        return "Unknown version";
+    }
 }
 
-#define bitmap_display_metadata(info) (bitmap_log_metadata((info), stdout))
+/*
+* Calculates the number of colors used in the given bitmap.
+*/
+static inline u64
+bitmap_colorcount(BitmapInfo* info) {
+    if(bitmap_version(info) == BITMAP_VCORE)
+        return (u64) pow(2, info->Core.BitCount * info->Core.Planes);
+    
+    return (u64) pow(2, info->V1.BitCount * info->V1.Planes);
+}
+
+/*
+* Reads bitmap file and image headers (metadata) from the given file.
+* Returns true if the data was successfully read.
+*/
+static inline s32
+bitmap_read_metadata(BitmapHeader* header, BitmapInfo* info, FILE* file) {
+    u64 readHeader = fread(header, sizeof(BitmapHeader), 1, file);
+    u64 readCore = fread(info, sizeof(BitmapCoreHeader), 1, file);
+    
+    if (!readHeader || !readCore)
+        return 0;
+    
+    // NOTE: Read remaining fields depending on the bitmap version
+    u32 v0InfoSize = sizeof(BitmapCoreHeader);
+    if (info->V1.Size > v0InfoSize) {
+        u08* infoPtr = (u08*) info;
+        u32  infoSize = info->V1.Size - sizeof(BitmapCoreHeader);
+        assert(infoSize > 0);
+        
+        u64 readExtra = fread(infoPtr + v0InfoSize, sizeof(u08), infoSize, file);
+        if (readExtra != infoSize)
+            return 0;
+    }
+    
+    return 1;
+}
+
+#define bitmap_display_metadata(header, info) (bitmap_log_metadata((header), (info), stdout))
+/*
+* Writes bitmap metdata (as text) to the file.
+*/
 static inline void
-bitmap_log_metadata(BitmapInfo* info, FILE* file) {
+bitmap_log_metadata(BitmapHeader* header,  BitmapInfo* info, FILE* file) {
     s32 version = bitmap_version(info);
+    char* versionString = bitmap_version_string(info);
+    
     u64 colorCount = bitmap_colorcount(info);
-    if (version == BITMAP_VUNKNOWN) return;
+    
+    fprintf(file, "BitmapHeader:\n");
+    fprintf(file, "  Header:     %c%c (0x%2x)\n", header->Header[0], header->Header[1], header->Id);
+    fprintf(file, "  Size:       0x%8x\n", header->Size);
+    fprintf(file, "  Reserved 0: 0x%4x\n", header->Reserved[0]);
+    fprintf(file, "  Reserved 1: 0x%4x\n", header->Reserved[1]);
+    fprintf(file, "  Offset:     0x%8x\n", header->Offset);
     
     fprintf(file, "  BitmapInfoHeader:\n");
-    fprintf(file, "  Version:        %i\n", version);
+    fprintf(file, "  Version:        %i (%s)\n", version, versionString);
     fprintf(file, "  Color count:    %llu\n", colorCount);
     fprintf(file, "  Uses palette:   %s\n", info->V1.UsedColors > 0 ? "true" : "false");
     fprintf(file, "    Size:            0x%x\n", info->V1.Size);
@@ -503,6 +543,8 @@ bitmap_log_metadata(BitmapInfo* info, FILE* file) {
     fprintf(file, "    YPelsPerMeter:   0x%x\n", info->V1.YPelsPerMeter);
     fprintf(file, "    UsedColors:      0x%2x\n", info->V1.UsedColors);
     fprintf(file, "    ImportantColors: 0x%2x\n", info->V1.ImportantColors);
+    
+    if (version == BITMAP_VUNKNOWN) return;
     
     if (version >= BITMAP_V2) {
         fprintf(file, "    RedMask:         0x%8x\n", info->V2.RedMask);
@@ -536,6 +578,23 @@ bitmap_log_metadata(BitmapInfo* info, FILE* file) {
     }
 }
 
+static inline void
+bitmap_write(Bitmap* bitmap, FILE* file) {
+    assert(bitmap->Info.V1.Size != 0);
+    fwrite(&bitmap->Header, sizeof(BitmapHeader), 1, file);
+    fwrite(&bitmap->Info.V1, bitmap->Info.V1.Size, 1, file);
+    
+    if (bitmap_version(&bitmap->Info) == BITMAP_VCORE) {
+        u32 size = (u32) (bitmap->Info.V1.Width * bitmap->Info.V1.Height * (bitmap->Info.V1.BitCount / 8));
+        
+        fwrite(bitmap->Data.Bytes, sizeof(u08), size, file);
+        return;
+    }
+    
+    fwrite(bitmap->Data.Bytes, sizeof(u08), bitmap->Info.V1.SizeImage, file);
+}
+
+// Palette helpers
 RgbQuad palette_black = { .Value = 0x00000000 };
 static inline RgbQuad*
 palette_color(RgbQuad* palette, u32 paletteSize, u32 color) {
@@ -722,18 +781,10 @@ static inline u08*
 bitmap_load(FILE* file, s32* width, s32* height) {
     BitmapHeader header;
     BitmapInfo info;
-    if (!bitmap_readinfo(&header, &info, file))
+    if (!bitmap_read_metadata(&header, &info, file))
         return NULL;
     
-    // TODO: Temporary
-    printf("Header:\n");
-    printf("  Header:     %c%c (0x%2x)\n", header.Header[0], header.Header[1], header.Id);
-    printf("  Size:       0x%8x\n", header.Size);
-    printf("  Reserved 0: 0x%4x\n", header.Reserved[0]);
-    printf("  Reserved 1: 0x%4x\n", header.Reserved[1]);
-    printf("  Offset:     0x%8x\n", header.Offset);
-    
-    bitmap_display_metadata(&info);
+    bitmap_display_metadata(&header, &info);
     
     // NOTE: File size is used to check offsets
     s64 currentPos = ftell(file);
@@ -1159,103 +1210,6 @@ bitmap_save(FILE* file, s32 width, s32 height, const u08* data) {
     
     bitmap_write(&bitmap, file);
     free(bitmap.Data.Bytes);
-}
-
-static inline RgbQuad
-centroid(RgbQuad* quads, u32 size) {
-    f32 red, green, blue;
-    red = green = blue = 0;
-    
-    for (u32 i = 0; i < size; i++) {
-        red += quads[i].Red;
-        green += quads[i].Green;
-        blue += quads[i].Blue;
-    }
-    
-    RgbQuad result;
-    result.Red = (u08) (red / size);
-    result.Green = (u08) (green / size);
-    result.Blue = (u08) (blue / size);
-    result.Alpha = 0xFF;
-    
-    return result;
-}
-
-static inline f32
-distance(RgbQuad* from, RgbQuad* to) {
-    s32 red, green, blue;
-    red = abs(from->Red - to->Red);
-    green = abs(from->Green - to->Green);
-    blue = abs(from->Blue - to->Blue);
-    
-    return (f32) sqrt(pow(red, 2) + pow(green, 2) + pow(blue, 2));
-}
-
-static inline f32
-distance_manhattan(RgbQuad* from, RgbQuad* to) {
-    f32 distR = from->Red - to->Red;
-    f32 distG = from->Green - to->Green;
-    f32 distB = from->Blue - to->Blue;
-    
-    return fabsf(distR) + fabsf(distG) + fabsf(distB);
-}
-
-static inline RgbQuad*
-kmeans_cluster(RgbQuad* data, u32 width, u32 height, u32 clusterCount) {
-    RgbQuad* centroids = malloc(sizeof(RgbQuad) * clusterCount);
-    
-    Stack* clusters = malloc(sizeof(Stack) * clusterCount);
-    for (u32 i = 0; i < clusterCount; i++) {
-        stack_init(clusters + i, 16);
-    }
-    
-    // NOTE: Place initial centroids, starting with a grayscale palette of clusterCount colors
-    u08 jmp = (u08) (256 / clusterCount);
-    RgbQuad* currentCentroid = centroids;
-    for (u32 i = 0; i < clusterCount; i++) {
-        currentCentroid->Red = (u08) (jmp * i);
-        currentCentroid->Green = (u08) (jmp * i);
-        currentCentroid->Blue = (u08) (jmp * i);
-        currentCentroid-> Alpha = 0xFF;
-        currentCentroid++;
-    }
-    
-    // NOTE: Do n iterations of k-means
-    for (u32 n = 0; n < 1; n++) {
-        for (s32 i = 0; i < clusterCount; i++)
-            stack_clear(clusters + i);
-        
-        for (u32 y = 0; y < height; y++) {
-            for (u32 x = 0; x < width; x++) {
-                u32 i = width * y + x;
-                RgbQuad* pixel = data + i;
-                
-                u32 minIndex = 0;
-                f32 minDist = 256 * 256; // Larger than furthest distance in the colorspace
-                for (u32 cent = 0; cent < clusterCount; cent++) {
-                    RgbQuad* centroid = centroids + cent;
-                    f32 dist = distance_manhattan(pixel, centroid);
-                    
-                    if (dist < minDist) {
-                        minDist = dist;
-                        minIndex = cent;
-                    }
-                }
-                
-                Stack* cluster = clusters + minIndex;
-                stack_push(cluster, pixel);
-            }
-        }
-        
-        // NOTE: Recompute centroids from new clusters
-        for (s32 i = 0; i < clusterCount; i++) {
-            Stack* cluster = clusters + i;
-            RgbQuad* clusterData = *((RgbQuad**) cluster->buffer);
-            centroids[i] = centroid(clusterData, cluster->size);
-        }
-    }
-    
-    return centroids;
 }
 
 static inline RgbQuad*
