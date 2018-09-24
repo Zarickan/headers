@@ -59,6 +59,133 @@ typedef struct ImageDescriptor {
 
 #pragma pack(pop)
 
+const u32 powers[17] = {
+    0x000001 << 0,
+    0x000001 << 1,
+    0x000001 << 2,
+    0x000001 << 3,
+    0x000001 << 4,
+    0x000001 << 5,
+    0x000001 << 6,
+    0x000001 << 7,
+    0x000001 << 8,
+    0x000001 << 9,
+    0x000001 << 10,
+    0x000001 << 11,
+    0x000001 << 12,
+    0x000001 << 13,
+    0x000001 << 14,
+    0x000001 << 15,
+    0x000001 << 16,
+};
+
+static inline u32
+readbits(u08** data, u08 bits, u08* bitPosition) {
+    u32 result = 0;
+    
+    for (s16 i = 0; i < bits; i++) {
+        result |= (powers[*bitPosition] & **data) >> *bitPosition;
+        result <<= 1;
+        
+        if (*bitPosition + 1 > 7) {
+            *bitPosition = 0;
+            (*data)++;
+        }
+        else {
+            (*bitPosition)++;
+        }
+    }
+    
+    return result;
+}
+
+static inline u16
+quickhash(u08* data, u08 length) {
+    u16 result = 0;
+    
+    for(s16 i = 0; i < length; i++) {
+        u16 value = (u16) data[i];
+        value <<= (8 * (i % 2));
+        
+        result ^= value;
+    }
+    
+    printf("Hash: %4x (%6i)\n", result, length);
+    return result;
+}
+
+typedef struct LzwEntry {
+    u16 Key;
+    u08 Length;
+    u08* Value;
+} LzwEntry;
+
+
+#define DICT_SIZE 4096
+static inline void
+gif_decompress(u08* data, s16  length, s16 codeSize, RgbQuad* output) {
+    u08* start = data;
+    u08 currentBit = 0;
+    
+    u32 code, previousCode, currentCode, nextCode = 256;
+    
+    LzwEntry* dictionary = malloc(sizeof(LzwEntry) * DICT_SIZE);
+    for (s16 i = 0; i < nextCode; i++) {
+        dictionary[i].Length = 1;
+        dictionary[i].Value = malloc(1);
+        *dictionary[i].Value = i;
+        dictionary[i].Key = quickhash(dictionary[i].Value, 1);
+    }
+    
+    // NOTE: Read initial code
+    previousCode = readbits(&data, codeSize, &currentBit);
+    nextCode += 2;
+    
+    while (data - start < length) {
+        // NOTE: Read code
+        currentCode = readbits(&data, codeSize, &currentBit);
+        
+        // NOTE: Codes
+        if (currentCode == 256 || currentCode == 257)
+            printf("LZW Code\n");
+        
+        // NOTE: Current combination
+        s16 combinationLength = dictionary[previousCode].Length + dictionary[currentCode].Length;
+        u08* combination = malloc(combinationLength);
+        memcpy(combination, dictionary[previousCode].Value, dictionary[previousCode].Length);
+        memcpy(combination + dictionary[previousCode].Length - 1, dictionary[currentCode].Value, dictionary[currentCode].Length);
+        u16 hash = quickhash(combination, combinationLength);
+        
+        // NOTE: Search dictionary
+        s32 found = 0;
+        for (s32 i = 0; i < DICT_SIZE; i++) {
+            if (dictionary[i].Key == hash) {
+                found = 1;
+                break;
+            }
+        }
+        
+        // NOTE: Check if in dictionary
+        if(found) {
+            printf("---Entry is in dictionary\n");
+        }
+        else {
+            printf("---Not in dictionary\n");
+            if (nextCode + 1 > powers[codeSize]) {
+                codeSize++;
+                printf("---Codesize is now %i\n", codeSize);
+            }
+            
+            LzwEntry* entry = dictionary + nextCode++;
+            entry->Key = hash;
+            entry->Length = combinationLength;
+            entry->Value = combination;
+        }
+        
+        previousCode = currentCode;
+    }
+}
+
 static inline u08*
 gif_load(FILE* file, s32* width, s32* height) {
     GifHeader header;
@@ -98,7 +225,7 @@ gif_load(FILE* file, s32* width, s32* height) {
     *width = screen.Width;
     *height = screen.Height;
     u64 resultSize = *width * *height;
-    // TODO: Use something else than RgbQuad, or move RgbQuad oput of bitmap.h
+    // TODO: Use something else than RgbQuad, or move RgbQuad out of bitmap.h
     u08* resultData = malloc(resultSize * sizeof(RgbQuad));
     RgbQuad* resultRgb = (RgbQuad*) resultData;
     
@@ -123,7 +250,6 @@ gif_load(FILE* file, s32* width, s32* height) {
         s32 seperatorRead = fread(&seperator, sizeof(char), 1, file);
         if (!seperatorRead) return NULL;
         fseek(file, -1, SEEK_CUR);
-        
         if (seperator != '!') continue;
         
         u16 functionCode;
@@ -133,10 +259,11 @@ gif_load(FILE* file, s32* width, s32* height) {
         
         u08 blockLength;
         fread(&blockLength, sizeof(u08), 1, file);
-        while (blockLength) {
-            fseek(file, blockLength, SEEK_CUR); // NOTE: Skip past the data
+        
+        do {
+            fseek(file, blockLength, SEEK_CUR);
             fread(&blockLength, sizeof(u08), 1, file);
-        }
+        } while (blockLength);
         
     } while (seperator == '!');
     
@@ -145,6 +272,10 @@ gif_load(FILE* file, s32* width, s32* height) {
         s32 seperatorRead = fread(&seperator, sizeof(char), 1, file);
         if (!seperatorRead) return NULL;
         fseek(file, -1, SEEK_CUR);
+        if (seperator != ',') continue;
+        
+        s64 location = ftell(file);
+        printf("----Location 0x%llx\n", location);
         
         ImageDescriptor image;
         s32 imageRead = fread(&image, sizeof(ImageDescriptor), 1, file);
@@ -174,19 +305,33 @@ gif_load(FILE* file, s32* width, s32* height) {
         printf("  Local color map:\n");
         printf("    Colors: %i\n", localColorCount);
         
+        // NOTE: Allocate raw pixel data (where we store the decompressed data)
+        u08* pixelData = malloc(image.Width * image.Height);
+        u08* decompressed = pixelData;
+        
         // NOTE: Read raster data
-        u08 minimumCodeSize;
+        u08 minimumCodeSize, codeSize;
         if (!fread(&minimumCodeSize, sizeof(u08), 1, file)) return NULL;
-        u08 lzwLength;
-        if (!fread(&lzwLength, sizeof(u08), 1, file)) return NULL;
-        
+        codeSize = minimumCodeSize;
         printf("Minimum code size: %i\n", minimumCodeSize);
-        printf("LZW bytes: %i\n", lzwLength);
         
-        fseek(file, lzwLength, SEEK_CUR);
-        fseek(file, 1, SEEK_CUR);
+        u08 lzwLength;
+        fread(&lzwLength, sizeof(u08), 1, file);
         
-    } while (seperator != 0x3B);
+        u08 buffer[256];
+        u08* data  = buffer;
+        do {
+            fread(&buffer, sizeof(u08), lzwLength, file);
+            gif_decompress(data, lzwLength, minimumCodeSize, resultRgb);
+            
+            fread(&lzwLength, sizeof(u08), 1, file);
+        } while (lzwLength);
+        
+        free(pixelData);
+        free(localColorMap);
+    } while (seperator == 0x3B);
+    
+    free(globalColorMap);
     
     return resultData;
 }
