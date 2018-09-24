@@ -4,7 +4,8 @@
 #include "bitmap.h"
 #include "gif.h"
 
-void gif_test(void) {
+void
+gif_test(void) {
     char* images[] = {
         "gif_valid/sunflower.gif",
         "gif_valid/small2.gif",
@@ -48,14 +49,11 @@ void gif_test(void) {
     exit(0);
 }
 
-int main(int argc, char** argv)
-{
-    gif_test();
+void
+bitmap_test(void) {
     
-    // Input files
     char* images[] = {
         // Corrupt (technically corrupt, but we should manage)
-        //*
         "test_corrupt/1bpp-no-palette.bmp",
         "test_corrupt/1bpp-pixeldata-cropped.bmp",
         "test_corrupt/24bpp-pixeldata-cropped.bmp",
@@ -126,9 +124,7 @@ int main(int argc, char** argv)
         "test_corrupt/width-times-height-overflow.bmp",
         "test_corrupt/width-zero.bmp",
         //"test_corrupt/infoheadersize-large.bmp", // Crashes
-        //*/
         // Questionable (we should be able to read all these)
-        //*
         "test_questionable/8bpp-pixels-not-in-palette.bmp",
         "test_questionable/filesize-bad.bmp",
         "test_questionable/filesize-zero.bmp",
@@ -177,9 +173,7 @@ int main(int argc, char** argv)
         "test_questionable/rle4-no-end-of-bitmap-marker.bmp",
         "test_questionable/rle8-height-negative.bmp",
         "test_questionable/rle8-no-end-of-bitmap-marker.bmp",
-        //*/
         // Valid images
-        //*
         "test_valid/1bpp-1x1.bmp",
         "test_valid/1bpp-320x240-color.bmp",
         "test_valid/1bpp-320x240-overlappingcolor.bmp",
@@ -279,8 +273,7 @@ int main(int argc, char** argv)
         "test_valid/rle8-blank-160x120.bmp",
         "test_valid/rle8-delta-320x240.bmp",
         "test_valid/rle8-encoded-320x240.bmp",
-        "test_valid/spaces in  filename.bmp",
-        //*/
+        "test_valid/spaces in  filename.bmp"
     };
     
     
@@ -316,6 +309,14 @@ int main(int argc, char** argv)
         fclose(output);
         free(data);
     }
+    
+    exit(0);
+}
+
+int
+main(int argc, char** argv) {
+    //gif_test();
+    bitmap_test();
     
     exit(0);
 }
