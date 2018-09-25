@@ -7,8 +7,8 @@
 void
 gif_test(void) {
     char* images[] = {
-        "gif_valid/sunflower.gif",
         "gif_valid/small2.gif",
+        "gif_valid/sunflower.gif",
         "gif_valid/morph.gif",
         "gif_valid/newton.gif",
         "gif_valid/oil.gif",
@@ -315,8 +315,8 @@ bitmap_test(void) {
 
 int
 main(int argc, char** argv) {
-    //gif_test();
-    bitmap_test();
+    gif_test();
+    //bitmap_test();
     
     exit(0);
 }

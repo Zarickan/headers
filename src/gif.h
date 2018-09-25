@@ -99,91 +99,11 @@ readbits(u08** data, u08 bits, u08* bitPosition) {
     return result;
 }
 
-static inline u16
-quickhash(u08* data, u08 length) {
-    u16 result = 0;
-    
-    for(s16 i = 0; i < length; i++) {
-        u16 value = (u16) data[i];
-        value <<= (8 * (i % 2));
-        
-        result ^= value;
-    }
-    
-    printf("Hash: %4x (%6i)\n", result, length);
-    return result;
-}
-
-typedef struct LzwEntry {
-    u16 Key;
-    u08 Length;
-    u08* Value;
-} LzwEntry;
-
-
-#define DICT_SIZE 4096
+#define CODECOUNT 4096
 static inline void
 gif_decompress(u08* data, s16  length, s16 codeSize, RgbQuad* output) {
     u08* start = data;
     u08 currentBit = 0;
-    
-    u32 code, previousCode, currentCode, nextCode = 256;
-    
-    LzwEntry* dictionary = malloc(sizeof(LzwEntry) * DICT_SIZE);
-    for (s16 i = 0; i < nextCode; i++) {
-        dictionary[i].Length = 1;
-        dictionary[i].Value = malloc(1);
-        *dictionary[i].Value = i;
-        dictionary[i].Key = quickhash(dictionary[i].Value, 1);
-    }
-    
-    // NOTE: Read initial code
-    previousCode = readbits(&data, codeSize, &currentBit);
-    nextCode += 2;
-    
-    while (data - start < length) {
-        // NOTE: Read code
-        currentCode = readbits(&data, codeSize, &currentBit);
-        
-        // NOTE: Codes
-        if (currentCode == 256 || currentCode == 257)
-            printf("LZW Code\n");
-        
-        // NOTE: Current combination
-        s16 combinationLength = dictionary[previousCode].Length + dictionary[currentCode].Length;
-        u08* combination = malloc(combinationLength);
-        memcpy(combination, dictionary[previousCode].Value, dictionary[previousCode].Length);
-        memcpy(combination + dictionary[previousCode].Length - 1, dictionary[currentCode].Value, dictionary[currentCode].Length);
-        u16 hash = quickhash(combination, combinationLength);
-        
-        // NOTE: Search dictionary
-        s32 found = 0;
-        for (s32 i = 0; i < DICT_SIZE; i++) {
-            if (dictionary[i].Key == hash) {
-                found = 1;
-                break;
-            }
-        }
-        
-        // NOTE: Check if in dictionary
-        if(found) {
-            printf("---Entry is in dictionary\n");
-        }
-        else {
-            printf("---Not in dictionary\n");
-            if (nextCode + 1 > powers[codeSize]) {
-                codeSize++;
-                printf("---Codesize is now %i\n", codeSize);
-            }
-            
-            LzwEntry* entry = dictionary + nextCode++;
-            entry->Key = hash;
-            entry->Length = combinationLength;
-            entry->Value = combination;
-        }
-        
-        previousCode = currentCode;
-    }
 }
 
 static inline u08*
@@ -220,6 +140,12 @@ gif_load(FILE* file, s32* width, s32* height) {
     
     printf("  Global color map:\n", colorCount, bpp);
     printf("    Colors: %i\n", colorCount);
+    /*
+    for(u16 c = 0; c < colorCount; c++) {
+        Rgb* color = globalColorMap + c;
+        printf("    %3i: %2x%2x%2x\n", c, color->Red, color->Green, color->Blue);
+    }
+    */
     
     // NOTE: Resulting image data
     *width = screen.Width;
@@ -304,28 +230,52 @@ gif_load(FILE* file, s32* width, s32* height) {
         
         printf("  Local color map:\n");
         printf("    Colors: %i\n", localColorCount);
+        /*
+        for(u16 c = 0; c < localColorCount; c++) {
+            Rgb* color = localColorMap + c;
+            printf("    %3i: %2x%2x%2x\n", c, color->Red, color->Green, color->Blue);
+        }
+        */
         
         // NOTE: Allocate raw pixel data (where we store the decompressed data)
         u08* pixelData = malloc(image.Width * image.Height);
-        u08* decompressed = pixelData;
         
         // NOTE: Read raster data
         u08 minimumCodeSize, codeSize;
         if (!fread(&minimumCodeSize, sizeof(u08), 1, file)) return NULL;
         codeSize = minimumCodeSize;
         printf("Minimum code size: %i\n", minimumCodeSize);
+        printf("Code size: %i\n", codeSize);
         
         u08 lzwLength;
         fread(&lzwLength, sizeof(u08), 1, file);
         
+        printf("Size: %u\n", image.Width * image.Height);
+        printf("Len : %u\n", lzwLength);
+        
+        
+        //gif_decompress(data, lzwLength, minimumCodeSize, resultRgb);
         u08 buffer[256];
-        u08* data  = buffer;
         do {
             fread(&buffer, sizeof(u08), lzwLength, file);
-            gif_decompress(data, lzwLength, minimumCodeSize, resultRgb);
-            
             fread(&lzwLength, sizeof(u08), 1, file);
         } while (lzwLength);
+        
+        // Turn palette indexes into raw color data in the output
+        u32 dataIndex = 0;
+        for(u32 top = image.Top; top < image.Top + image.Height; top++) {
+            for(u32 left = image.Left; left < image.Left + image.Width; left++) {
+                u32 index = top * screen.Width + left;
+                Rgb* color = globalColorMap + pixelData[dataIndex];
+                
+                resultRgb[index].Red = color->Red;
+                resultRgb[index].Green = color->Green;
+                resultRgb[index].Blue = color->Blue;
+                resultRgb[index].Alpha = 0xFF;
+                
+                dataIndex++;
+            }
+        }
         
         free(pixelData);
         free(localColorMap);
