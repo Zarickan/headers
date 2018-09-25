@@ -495,6 +495,14 @@ bitmap_read_metadata(BitmapHeader* header, BitmapInfo* info, FILE* file) {
     if (!readHeader || !readCore)
         return 0;
     
+    // NOTE: If info size is invalid, assume V1 info
+    // (If the size is invalid the version will be VUNKNOWN)
+    if (bitmap_version(info) == BITMAP_VUNKNOWN) {
+        printf("Warning: Invalid info header size, assuming V1\n");
+        info->V1.Size = sizeof(BitmapInfoV1Header);
+    }
+    
+    
     // NOTE: Read remaining fields depending on the bitmap version
     u32 v0InfoSize = sizeof(BitmapCoreHeader);
     if (info->V1.Size > v0InfoSize) {
@@ -781,17 +789,22 @@ static inline u08*
 bitmap_load(FILE* file, s32* width, s32* height) {
     BitmapHeader header;
     BitmapInfo info;
-    if (!bitmap_read_metadata(&header, &info, file))
+    if (!bitmap_read_metadata(&header, &info, file)) {
+        printf("Error: Unable to read bitmap info header\n");
         return NULL;
+    }
     
-    bitmap_display_metadata(&header, &info);
+    //bitmap_display_metadata(&header, &info);
     
     // NOTE: File size is used to check offsets
     s64 currentPos = ftell(file);
     fseek(file, 0l, SEEK_END);
     s64 fileSize = ftell(file) - currentPos;
     fseek(file, currentPos, SEEK_SET);
-    if (fileSize == 0) return NULL;
+    if (fileSize == 0) {
+        printf("Error: No pixel data in file\n");
+        return NULL;
+    }
     
     // NOTE: Core bitmaps have a different info header, so we handle them seperately
     s32 version = bitmap_version(&info);
@@ -800,16 +813,22 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     }
     
     // NOTE: For unknown version assume v1
-    if (version == BITMAP_VUNKNOWN)
+    if (version == BITMAP_VUNKNOWN) {
+        printf("Warning: Unknown version specified in info header, assuming Version 1\n");
         info.V1.Size = sizeof(BitmapInfoHeader), version = 1;
+    }
     
     // NOTE: Assuming negative width is an error, we take the absolute width
-    if (info.V1.Width < 0)
+    if (info.V1.Width < 0) {
+        printf("Warning: Width is negative, assuming width should be positive\n");
         info.V1.Width = ABS(info.V1.Width);
+    }
     
     // NOTE: Invalid (0) height and/or width
-    if (!info.V1.Width || !info.V1.Height)
+    if (!info.V1.Width || !info.V1.Height) {
+        printf("Error: Invalid bitmap, width and/or height is set to 0\n");
         return NULL;
+    }
     
     *width = info.V1.Width;
     *height = ABS(info.V1.Height);
@@ -817,20 +836,27 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     // NOTE: Check the height and width are valid (the number of pixels needed should not be larger than what can be stored in  a u32, since u32 stores the SizeImage field)
     // NOTE: This is a lower bound for the amount of bytes needed, since it does not account for padding.
     u64 pixelsNeeded = ((u64) *width) * ((u64) *height) * sizeof(RgbQuad);
-    if (pixelsNeeded > 0xFFFFFFFF)
+    if (pixelsNeeded > 0xFFFFFFFF) {
+        printf("Error: Invalid bitmap, width * height overflows 32 bits\n");
         return NULL;
+    }
     
     // NOTE: Bad bitcount, calculate it from Width and SizeImage according to formula
     if (!(info.V1.BitCount ==  1 || info.V1.BitCount ==  2 || info.V1.BitCount ==  4 || info.V1.BitCount ==  8 || info.V1.BitCount == 16 || info.V1.BitCount == 24 || info.V1.BitCount == 32)) {
+        printf("Warning: Invalid Bitcount specified in info, calculating from size, width and height\n");
         info.V1.BitCount = (u16) ((32 * ((info.V1.SizeImage / (info.V1.Height * 4)) - (31 / 32))) / info.V1.Width);
     }
     
     // NOTE: Correct invalid RLE4/8 and BitCount values
     // If the bitcount does not match the compression mode correct the compression mode so it does
-    if (info.V1.Compression == BI_RLE4 && info.V1.BitCount == 8)
+    if (info.V1.Compression == BI_RLE4 && info.V1.BitCount == 8) {
+        printf("Warning: BitCount 8 specified for RLE4, assuming RLE8\n");
         info.V1.Compression = BI_RLE8;
-    if (info.V1.Compression == BI_RLE8 && info.V1.BitCount == 4)
+    }
+    if (info.V1.Compression == BI_RLE8 && info.V1.BitCount == 4) {
+        printf("Warning: BitCount 4 specified for RLE8, assuming RLE4\n");
         info.V1.Compression = BI_RLE4;
+    }
     
     // NOTE: Rows are fit to a DWORD (4 byte) boundary (32 is BPP of output, 31 is bpp - 1 bit)
     u32 rowLength = (u32) (floor((info.V1.BitCount * info.V1.Width + 31.0) / 32.0) * 4);
@@ -840,6 +866,11 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     // NOTE: We cannot calculate the raw size of any image compressed with RLE and have to rely on the size specified in the info
     if (info.V1.Compression == BI_RLE4 || info.V1.Compression == BI_RLE8)
         dataSize = info.V1.SizeImage;
+    else if (dataSize != info.V1.SizeImage) {
+        // NOTE: Datasize does not match Size, correct this
+        printf("Warning: SizeImage does not match calculated size (%u != %u)\n", info.V1.SizeImage, dataSize);
+        info.V1.SizeImage = dataSize;
+    }
     
     // NOTE: If row is negative image is in the opposite direction, so reverse this point
     u64 resultSize = info.V1.Width * ABS(info.V1.Height);
@@ -849,9 +880,6 @@ bitmap_load(FILE* file, s32* width, s32* height) {
     // NOTE: Set all pixels in output to black
     for (u64 i = 0; i < resultSize; i++)
         resultRgb[i].Value = 0xFF000000;
-    
-    if (!*width || !*height)
-        return NULL;
     
     u08* inputData = malloc(dataSize);
     u08* pixelData = inputData;
@@ -864,13 +892,17 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         
         // NOTE: If no palette, return data as is (transparent image of the given size)
         // TODO: Use a default palette?
-        if (!colorCount)
-            return NULL;
+        if (!colorCount) {
+            printf("Warning: No colors specified for palette (UsedColors == 0), assuming maximum palette size\n");
+            colorCount = maxColorCount;
+        }
         
         RgbQuad* colors = malloc(sizeof(RgbQuad) * colorCount);
         u64 colorsRead = fread(colors, sizeof(RgbQuad), colorCount, file);
-        if (colorsRead != colorCount)
+        if (colorsRead != colorCount) {
+            printf("Error: Unable to read palette from file\n");
             return NULL;
+        }
         
         // NOTE: Jump to the offset only if non-zero
         if (header.Offset && header.Offset < fileSize)

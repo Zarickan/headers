@@ -51,9 +51,8 @@ gif_test(void) {
 
 void
 bitmap_test(void) {
-    
     char* images[] = {
-        // Corrupt (technically corrupt, but we should manage)
+        "test_corrupt/infoheadersize-large.bmp",
         "test_corrupt/1bpp-no-palette.bmp",
         "test_corrupt/1bpp-pixeldata-cropped.bmp",
         "test_corrupt/24bpp-pixeldata-cropped.bmp",
@@ -123,7 +122,7 @@ bitmap_test(void) {
         "test_corrupt/width-negative.bmp",
         "test_corrupt/width-times-height-overflow.bmp",
         "test_corrupt/width-zero.bmp",
-        //"test_corrupt/infoheadersize-large.bmp", // Crashes
+        "test_corrupt/infoheadersize-large.bmp", // Crashes
         // Questionable (we should be able to read all these)
         "test_questionable/8bpp-pixels-not-in-palette.bmp",
         "test_questionable/filesize-bad.bmp",
@@ -276,7 +275,6 @@ bitmap_test(void) {
         "test_valid/spaces in  filename.bmp"
     };
     
-    
     FILE* invalid = fopen("invalid.bmp", "rb");
     s32 iwidth, iheight;
     u08* invalid_template = bitmap_load(invalid, &iwidth, &iheight);
@@ -315,8 +313,8 @@ bitmap_test(void) {
 
 int
 main(int argc, char** argv) {
-    gif_test();
-    //bitmap_test();
+    //gif_test();
+    bitmap_test();
     
     exit(0);
 }
