@@ -812,6 +812,16 @@ bitmap_load(FILE* file, s32* width, s32* height) {
         return bitmap_load_core(file, fileSize, &header, &info.Core, width, height);
     }
     
+    // NOTE: Check for proper magic number in header
+    if(header.Id != 0x4D42) {
+        printf("Warning: Invalid magic number sepcified in file header\n");
+    }
+    
+    // NOTE: Check if reserved fields are set properly
+    if (header.Reserved[0] != 0x00 || header.Reserved[1] != 0x00) {
+        printf("Warning: Reserved bytes in header non zero\n");
+    }
+    
     // NOTE: For unknown version assume v1
     if (version == BITMAP_VUNKNOWN) {
         printf("Warning: Unknown version specified in info header, assuming Version 1\n");
