@@ -313,8 +313,8 @@ bitmap_test(void) {
 
 int
 main(int argc, char** argv) {
-    //gif_test();
-    bitmap_test();
+    gif_test();
+    //bitmap_test();
     
     exit(0);
 }

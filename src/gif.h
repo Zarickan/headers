@@ -138,7 +138,7 @@ gif_load(FILE* file, s32* width, s32* height) {
     s32 colorsRead = fread(globalColorMap, sizeof(Rgb), colorCount, file);
     if (colorsRead != colorCount) return NULL;
     
-    printf("  Global color map:\n", colorCount, bpp);
+    printf("  Global color map:\n");
     printf("    Colors: %i\n", colorCount);
     /*
     for(u16 c = 0; c < colorCount; c++) {
