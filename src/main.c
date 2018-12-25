@@ -7,22 +7,22 @@
 void
 gif_test(void) {
     char* images[] = {
-        "gif_valid/small2.gif",
-        "gif_valid/sunflower.gif",
-        "gif_valid/morph.gif",
-        "gif_valid/newton.gif",
-        "gif_valid/oil.gif",
-        "gif_valid/fullcolor.gif",
-        "gif_valid/quilt.gif",
-        "gif_valid/globe.gif",
+        "gif/valid/small2.gif",
+        "gif/valid/sunflower.gif",
+        "gif/valid/morph.gif",
+        "gif/valid/newton.gif",
+        "gif/valid/oil.gif",
+        "gif/valid/fullcolor.gif",
+        "gif/valid/quilt.gif",
+        "gif/valid/globe.gif",
     };
     
     char outputFile[500];
     u16 imageCount = sizeof(images) / sizeof(char*);
     for (u16 i = 0; i < imageCount; i++) {
         strcpy(outputFile, "");
-        strcat(outputFile, "gif_output/");
-        strcat(outputFile,  strstr(images[i], "/") + 1);
+        strcat(outputFile, "gif/output/");
+        strcat(outputFile,  strstr(strstr(images[i], "/") + 1, "/") + 1);
         strcat(outputFile, ".bmp");
         
         printf("\nImage: %s\n", images[i]);
@@ -313,8 +313,8 @@ bitmap_test(void) {
 
 int
 main(int argc, char** argv) {
-    //gif_test();
-    bitmap_test();
+    gif_test();
+    //bitmap_test();
     
     exit(0);
 }
