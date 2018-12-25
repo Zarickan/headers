@@ -8,6 +8,7 @@ void
 gif_test(void) {
     char* images[] = {
         "gif/valid/small2.gif",
+        /*
         "gif/valid/sunflower.gif",
         "gif/valid/morph.gif",
         "gif/valid/newton.gif",
@@ -15,6 +16,7 @@ gif_test(void) {
         "gif/valid/fullcolor.gif",
         "gif/valid/quilt.gif",
         "gif/valid/globe.gif",
+        */
     };
     
     char outputFile[500];
