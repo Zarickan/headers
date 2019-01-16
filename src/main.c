@@ -7,7 +7,7 @@
 void
 gif_test(void) {
     char* images[] = {
-        "gif/valid/small2.gif",
+        "gif/valid/sample.gif",
         /*
         "gif/valid/sunflower.gif",
         "gif/valid/morph.gif",

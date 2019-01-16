@@ -27,9 +27,9 @@ typedef struct ScreenDescriptor {
     union {
         u08 Value;
         struct {
-            u08 MapSize : 3;
-            u08 Sort : 1;
-            u08 Bpp : 3;
+            u08 MapSize   : 3;
+            u08 Sort      : 1;
+            u08 Bpp       : 3;
             u08 GlobalMap : 1;
         };
     } Info; // TODO: Better name?
@@ -38,7 +38,6 @@ typedef struct ScreenDescriptor {
 } ScreenDescriptor;
 
 typedef struct ImageDescriptor {
-    char Seperator;
     u16 Left;
     u16 Top;
     u16 Width;
@@ -47,15 +46,39 @@ typedef struct ImageDescriptor {
     union {
         u08 Value;
         struct {
-            u08 MapSize : 3;
+            u08 MapSize   : 3;
             u08 Reserved1 : 1;
             u08 Reserved2 : 1;
-            u08 Sort : 1;
+            u08 Sort      : 1;
             u08 Interlace : 1;
-            u08 LocalMap : 1;
+            u08 LocalMap  : 1;
         };
     } Info;
 } ImageDescriptor;
+
+typedef struct LzwBlock {
+    u08 MinimumCodeSize;
+    u08 CodeSize;
+    
+    u08 Length;
+    u08 *Data;
+} LzwBlock;
+
+static inline u08
+read_lzw_block(FILE *file, LzwBlock *block) {
+    u08 bytesRead = fread(&block->MinimumCodeSize, sizeof(u08), 1, file);
+    if(!bytesRead) return 0;
+    block->CodeSize = block->MinimumCodeSize;
+    
+    bytesRead = fread(&block->Length, sizeof(u08), 1, file);
+    if(!bytesRead) return 0;
+    
+    block->Data = malloc(sizeof(u08) * block->Length);
+    bytesRead = fread(&block->Data, sizeof(u08), block->Length, file);
+    if(bytesRead != block->Length) return 0;
+    
+    return 1;
+}
 
 #pragma pack(pop)
 
@@ -103,11 +126,8 @@ readbits(u08** data, u08 bits, u08* bitPosition) {
 static inline void
 gif_decompress(u08* input, s16  length, s16 codeSize, u08* output) {
     u16 codeTable[65536];
-
+    
     // Populate the codetable
-
-
-
 }
 
 static inline u08*
@@ -144,12 +164,10 @@ gif_load(FILE* file, s32* width, s32* height) {
     
     printf("  Global color map:\n");
     printf("    Colors: %i\n", colorCount);
-    /*
     for(u16 c = 0; c < colorCount; c++) {
         Rgb* color = globalColorMap + c;
         printf("    %3i: %2x%2x%2x\n", c, color->Red, color->Green, color->Blue);
     }
-    */
     
     // NOTE: Resulting image data
     *width = screen.Width;
@@ -177,42 +195,39 @@ gif_load(FILE* file, s32* width, s32* height) {
     // TODO: We currently ignore extension, properly read and use them instead
     char seperator;
     do {
-        s32 seperatorRead = fread(&seperator, sizeof(char), 1, file);
-        if (!seperatorRead) return NULL;
-        fseek(file, -1, SEEK_CUR);
-        if (seperator != '!') continue;
+        // Read the separator, skip if the separator != !
+        fread(&seperator, sizeof(char), 1, file);
+        if(seperator != '!') {
+            // NOTE: If the separator is != '!' then it should be 0x00
+            //       (no more extensions follow)
+            //       Hence we do not need to seek back 1 byte
+            continue;
+        }
         
-        u16 functionCode;
-        fread(&functionCode, sizeof(u16), 1, file);
-        printf("  Extension descriptor:\n");
-        printf("    Function code: 0x%2x\n", functionCode);
-        
+        u08 functionCode;
         u08 blockLength;
+        fread(&functionCode, sizeof(u08), 1, file);
         fread(&blockLength, sizeof(u08), 1, file);
+        fseek(file, blockLength, SEEK_CUR);
         
-        do {
-            fseek(file, blockLength, SEEK_CUR);
-            fread(&blockLength, sizeof(u08), 1, file);
-        } while (blockLength);
-        
+        printf("  Extension descriptor:\n");
+        printf("    Function code:    0x%2x\n", functionCode);
+        printf("    Extension length: %u\n", blockLength);
     } while (seperator == '!');
     
     // NOTE: Read image descriptors until end of file
     do {
-        s32 seperatorRead = fread(&seperator, sizeof(char), 1, file);
-        if (!seperatorRead) return NULL;
-        fseek(file, -1, SEEK_CUR);
-        if (seperator != ',') continue;
-
-        s64 location = ftell(file);
-        printf("----Location 0x%llx\n", location);
-
+        // Read the separator, skip if the separator != ,
+        // If it is, we seek back so we can read the full descriptor
+        fread(&seperator, sizeof(char), 1, file);
+        if(seperator != ',') {
+            continue;
+        }
+        
         ImageDescriptor image;
-        s32 imageRead = fread(&image, sizeof(ImageDescriptor), 1, file);
-        if (!imageRead) return NULL;
-
+        s32 numberRead = fread(&image, sizeof(ImageDescriptor), 1, file);
+        if (!numberRead) return NULL;
         printf("  Image Descriptor:\n");
-        printf("    Seperator:   %c\n", image.Seperator);
         printf("    Left:        0x%2x (%3u)\n", image.Left, image.Left);
         printf("    Top:         0x%2x (%3u)\n", image.Top, image.Top);
         printf("    Width:       0x%2x (%3u)\n", image.Width, image.Width);
@@ -224,85 +239,40 @@ gif_load(FILE* file, s32* width, s32* height) {
         printf("      Sort:      0x%2x\n", image.Info.Sort);
         printf("      Interlace: 0x%2x (I)\n", image.Info.Interlace);
         printf("      LocalMap:  0x%2x (M)\n", image.Info.LocalMap);
-
-        // NOTE: Read local color map
-        u08 localBpp = image.Info.MapSize + 1;
-        u16 localColorCount = pow(2, localBpp) * image.Info.LocalMap;
-        Rgb *localColorMap = malloc(sizeof(Rgb) * localColorCount);
-        colorsRead = fread(localColorMap, sizeof(Rgb), localColorCount, file);
-        if (colorsRead != localColorCount) return NULL;
-
-        printf("  Local color map:\n");
-        printf("    Colors: %i\n", localColorCount);
-        /*
-        for(u16 c = 0; c < localColorCount; c++) {
-            Rgb* color = localColorMap + c;
-            printf("    %3i: %2x%2x%2x\n", c, color->Red, color->Green, color->Blue);
-        }
-        */
-
-        // NOTE: Allocate raw pixel data (where we store the decompressed data)
-        u08 *pixelData = malloc(image.Width * image.Height);
-
-        // NOTE: Read raster data
-        u08 minimumCodeSize, codeSize;
-        if (!fread(&minimumCodeSize, sizeof(u08), 1, file)) return NULL;
-        codeSize = minimumCodeSize;
-        printf("Minimum code size: %i\n", minimumCodeSize);
-        printf("Code size: %i\n", codeSize);
-
-        u08 lzwLength;
-        fread(&lzwLength, sizeof(u08), 1, file);
-
-        printf("Size: %u\n", image.Width * image.Height);
-        printf("Len : %u\n", lzwLength);
-
-        // Create codetable
-        union TableEntry {
-            u64 Value;
-            struct {
-                Rgb* Start;
-                u32 Length;
-            };
-        };
-        union TableEntry codeTable[65536];
-
-        // Populate codetable with colors
-        codeTable[0x100].Value = 0; // CLEAR
-        codeTable[0x101].Value = 0; // END
-        for (u32 i = 0; i < 0x100; i++) {
-            if(i >= colorCount) {
-                codeTable[i].Length = 0;
-                continue;
-            }
-
-            codeTable[i].Start = globalColorMap + i;
-            codeTable[i].Length = 1;
-        }
-
-        u08* buffer = malloc(lzwLength * sizeof(u08));
-        fread(&buffer, sizeof(u08), lzwLength, file);
-        gif_decompress(buffer, lzwLength, minimumCodeSize, pixelData);
         
-        // Turn palette indexes into raw color data in the output
-        u32 dataIndex = 0;
-        for(u32 top = image.Top; top < image.Top + image.Height; top++) {
-            for(u32 left = image.Left; left < image.Left + image.Width; left++) {
-                u32 index = top * screen.Width + left;
-                Rgb* color = globalColorMap + pixelData[dataIndex];
-                
-                resultRgb[index].Red = color->Red;
-                resultRgb[index].Green = color->Green;
-                resultRgb[index].Blue = color->Blue;
-                resultRgb[index].Alpha = 0xFF;
-                
-                dataIndex++;
-            }
+        // NOTE: The local color map is only present if the info byte is != 0
+        Rgb *colorMap = NULL;
+        if (image.Info.Value != 0x00) {
+            u16 colorCount = pow(2, image.Info.MapSize + 1) * image.Info.LocalMap;
+            colorMap = malloc(sizeof(Rgb) * colorCount);
+            
+            numberRead = fread(colorMap, sizeof(Rgb), colorCount, file);
+            if (numberRead != colorCount) return NULL;
         }
+        else
+            printf("    No local color map\n");
         
-        free(pixelData);
-        free(localColorMap);
+        // NOTE: Read LZW data
+        // TODO: Check return value
+        LzwBlock lzw;
+        read_lzw_block(file, &lzw);
+        printf("    LzwBlock:\n");
+        printf("      MinimumCodeSize: %i\n", lzw.MinimumCodeSize);
+        printf("      CodeSize:        %u\n", lzw.CodeSize);
+        printf("      Length:          %u\n", lzw.Length);
+        
+        // TODO: Handle when more LZW blocks follow
+        // NOTE: The final byte after the LZW data should be 0x00
+        u08 eoi;
+        fread(&eoi, sizeof(u08), 1, file);
+        printf("  EOI: %x\n", eoi);
+        
+        // TODO: Free what we allocate
     } while (seperator == 0x3B);
+    
+    u08 final = 0;
+    fread(&final, sizeof(u08), 1, file);
+    printf("Final %x\n", final);
     
     free(globalColorMap);
     
