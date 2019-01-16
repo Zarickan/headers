@@ -1,5 +1,6 @@
-# Output folder
+# Output folder, meta folders
 output/
+bitmap/output/
 
 # Prerequisites
 *.d

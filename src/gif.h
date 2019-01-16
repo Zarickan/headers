@@ -101,9 +101,13 @@ readbits(u08** data, u08 bits, u08* bitPosition) {
 
 #define CODECOUNT 4096
 static inline void
-gif_decompress(u08* data, s16  length, s16 codeSize, RgbQuad* output) {
-    u08* start = data;
-    u08 currentBit = 0;
+gif_decompress(u08* input, s16  length, s16 codeSize, u08* output) {
+    u16 codeTable[65536];
+
+    // Populate the codetable
+
+
+
 }
 
 static inline u08*
@@ -138,7 +142,7 @@ gif_load(FILE* file, s32* width, s32* height) {
     s32 colorsRead = fread(globalColorMap, sizeof(Rgb), colorCount, file);
     if (colorsRead != colorCount) return NULL;
     
-    printf("  Global color map:\n", colorCount, bpp);
+    printf("  Global color map:\n");
     printf("    Colors: %i\n", colorCount);
     /*
     for(u16 c = 0; c < colorCount; c++) {
@@ -199,14 +203,14 @@ gif_load(FILE* file, s32* width, s32* height) {
         if (!seperatorRead) return NULL;
         fseek(file, -1, SEEK_CUR);
         if (seperator != ',') continue;
-        
+
         s64 location = ftell(file);
         printf("----Location 0x%llx\n", location);
-        
+
         ImageDescriptor image;
         s32 imageRead = fread(&image, sizeof(ImageDescriptor), 1, file);
         if (!imageRead) return NULL;
-        
+
         printf("  Image Descriptor:\n");
         printf("    Seperator:   %c\n", image.Seperator);
         printf("    Left:        0x%2x (%3u)\n", image.Left, image.Left);
@@ -220,14 +224,14 @@ gif_load(FILE* file, s32* width, s32* height) {
         printf("      Sort:      0x%2x\n", image.Info.Sort);
         printf("      Interlace: 0x%2x (I)\n", image.Info.Interlace);
         printf("      LocalMap:  0x%2x (M)\n", image.Info.LocalMap);
-        
+
         // NOTE: Read local color map
         u08 localBpp = image.Info.MapSize + 1;
         u16 localColorCount = pow(2, localBpp) * image.Info.LocalMap;
-        Rgb* localColorMap = malloc(sizeof(Rgb) * localColorCount);
+        Rgb *localColorMap = malloc(sizeof(Rgb) * localColorCount);
         colorsRead = fread(localColorMap, sizeof(Rgb), localColorCount, file);
         if (colorsRead != localColorCount) return NULL;
-        
+
         printf("  Local color map:\n");
         printf("    Colors: %i\n", localColorCount);
         /*
@@ -236,30 +240,49 @@ gif_load(FILE* file, s32* width, s32* height) {
             printf("    %3i: %2x%2x%2x\n", c, color->Red, color->Green, color->Blue);
         }
         */
-        
+
         // NOTE: Allocate raw pixel data (where we store the decompressed data)
-        u08* pixelData = malloc(image.Width * image.Height);
-        
+        u08 *pixelData = malloc(image.Width * image.Height);
+
         // NOTE: Read raster data
         u08 minimumCodeSize, codeSize;
         if (!fread(&minimumCodeSize, sizeof(u08), 1, file)) return NULL;
         codeSize = minimumCodeSize;
         printf("Minimum code size: %i\n", minimumCodeSize);
         printf("Code size: %i\n", codeSize);
-        
+
         u08 lzwLength;
         fread(&lzwLength, sizeof(u08), 1, file);
-        
+
         printf("Size: %u\n", image.Width * image.Height);
         printf("Len : %u\n", lzwLength);
-        
-        
-        //gif_decompress(data, lzwLength, minimumCodeSize, resultRgb);
-        u08 buffer[256];
-        do {
-            fread(&buffer, sizeof(u08), lzwLength, file);
-            fread(&lzwLength, sizeof(u08), 1, file);
-        } while (lzwLength);
+
+        // Create codetable
+        union TableEntry {
+            u64 Value;
+            struct {
+                Rgb* Start;
+                u32 Length;
+            };
+        };
+        union TableEntry codeTable[65536];
+
+        // Populate codetable with colors
+        codeTable[0x100].Value = 0; // CLEAR
+        codeTable[0x101].Value = 0; // END
+        for (u32 i = 0; i < 0x100; i++) {
+            if(i >= colorCount) {
+                codeTable[i].Length = 0;
+                continue;
+            }
+
+            codeTable[i].Start = globalColorMap + i;
+            codeTable[i].Length = 1;
+        }
+
+        u08* buffer = malloc(lzwLength * sizeof(u08));
+        fread(&buffer, sizeof(u08), lzwLength, file);
+        gif_decompress(buffer, lzwLength, minimumCodeSize, pixelData);
         
         // Turn palette indexes into raw color data in the output
         u32 dataIndex = 0;
