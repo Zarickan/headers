@@ -56,6 +56,8 @@ typedef struct ImageDescriptor {
     } Info;
 } ImageDescriptor;
 
+#pragma pack(pop)
+
 typedef struct LzwBlock {
     u08 MinimumCodeSize;
     u08 CodeSize;
@@ -64,7 +66,7 @@ typedef struct LzwBlock {
     u08 *Data;
 } LzwBlock;
 
-static inline u08
+static inline s32
 read_lzw_block(FILE *file, LzwBlock *block) {
     u08 bytesRead = fread(&block->MinimumCodeSize, sizeof(u08), 1, file);
     if(!bytesRead) return 0;
@@ -73,14 +75,13 @@ read_lzw_block(FILE *file, LzwBlock *block) {
     bytesRead = fread(&block->Length, sizeof(u08), 1, file);
     if(!bytesRead) return 0;
     
-    block->Data = malloc(sizeof(u08) * block->Length);
-    bytesRead = fread(&block->Data, sizeof(u08), block->Length, file);
+    u08* data = malloc(sizeof(u08) * block->Length);
+    bytesRead = fread(data, sizeof(u08), block->Length, file);
     if(bytesRead != block->Length) return 0;
+    block->Data = data;
     
     return 1;
 }
-
-#pragma pack(pop)
 
 const u32 powers[17] = {
     0x000001 << 0,
@@ -102,24 +103,40 @@ const u32 powers[17] = {
     0x000001 << 16,
 };
 
-static inline u32
-readbits(u08** data, u08 bits, u08* bitPosition) {
-    u32 result = 0;
+static inline u16
+readbits(u08 **data, u08 bits, u08 *bitPosition) {
+    u16 result = 0;
     
     for (s16 i = 0; i < bits; i++) {
-        result |= (powers[*bitPosition] & **data) >> *bitPosition;
-        result <<= 1;
+        u08 bitMask = powers[*bitPosition];
+        u08 value = **data & bitMask;
+        
+        if(value)
+            result |= powers[i];
+        
         
         if (*bitPosition + 1 > 7) {
             *bitPosition = 0;
             (*data)++;
         }
-        else {
+        else
             (*bitPosition)++;
-        }
     }
     
     return result;
+}
+
+static inline s32
+decode_lzw_block(LzwBlock *block) {
+    u08 *bits = block->Data;
+    u08 position = 0;
+    
+    u16 result = readbits(&bits, 9, &position);
+    printf("%x\n", result);
+    result = readbits(&bits, 9, &position);
+    printf("%x\n", result);
+    
+    return 1;
 }
 
 #define CODECOUNT 4096
@@ -260,6 +277,8 @@ gif_load(FILE* file, s32* width, s32* height) {
         printf("      MinimumCodeSize: %i\n", lzw.MinimumCodeSize);
         printf("      CodeSize:        %u\n", lzw.CodeSize);
         printf("      Length:          %u\n", lzw.Length);
+        
+        decode_lzw_block(&lzw);
         
         // TODO: Handle when more LZW blocks follow
         // NOTE: The final byte after the LZW data should be 0x00
