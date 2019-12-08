@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "types.h"
 #include "bitmap.h"
 #include "gif.h"
@@ -7,16 +8,17 @@
 void
 gif_test(void) {
     char* images[] = {
-        "gif/valid/sample.gif",
-        /*
-        "gif/valid/sunflower.gif",
-        "gif/valid/morph.gif",
-        "gif/valid/newton.gif",
-        "gif/valid/oil.gif",
-        "gif/valid/fullcolor.gif",
-        "gif/valid/quilt.gif",
-        "gif/valid/globe.gif",
-        */
+        //"gif/valid/sample.gif",
+        "gif/valid/small.gif"
+            /*
+    "gif/valid/sunflower.gif",
+    "gif/valid/morph.gif",
+    "gif/valid/newton.gif",
+    "gif/valid/oil.gif",
+    "gif/valid/fullcolor.gif",
+    "gif/valid/quilt.gif",
+    "gif/valid/globe.gif",
+    */
     };
     
     char outputFile[500];

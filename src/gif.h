@@ -56,7 +56,6 @@ typedef struct ImageDescriptor {
     } Info;
 } ImageDescriptor;
 
-#pragma pack(pop)
 
 typedef struct LzwBlock {
     u08 MinimumCodeSize;
@@ -66,24 +65,97 @@ typedef struct LzwBlock {
     u08 *Data;
 } LzwBlock;
 
-static inline s32
-read_lzw_block(FILE *file, LzwBlock *block) {
-    u08 bytesRead = fread(&block->MinimumCodeSize, sizeof(u08), 1, file);
-    if(!bytesRead) return 0;
-    block->CodeSize = block->MinimumCodeSize;
+#pragma pack(pop)
+
+// LZW Decoding
+
+typedef struct LzwTable {
+    u16 Code;
     
-    bytesRead = fread(&block->Length, sizeof(u08), 1, file);
-    if(!bytesRead) return 0;
+    u16 Length;
+    u08 *Data;
     
-    u08* data = malloc(sizeof(u08) * block->Length);
-    bytesRead = fread(data, sizeof(u08), block->Length, file);
-    if(bytesRead != block->Length) return 0;
-    block->Data = data;
+    struct LzwTable *Previous;
+    struct LzwTable *Next;
+} LzwTable;
+
+
+static inline LzwTable *
+lzw_table_find(LzwTable *table, u16 code) {
+    LzwTable *current = table;
+    while(current != NULL) {
+        if(current->Code < code) {
+            current = current->Next;
+        }
+        else if(current->Code > code){
+            current = current->Previous;
+        }
+        else {
+            return current;
+        }
+    }
     
-    return 1;
+    return NULL;
 }
 
-const u32 powers[17] = {
+static inline LzwTable *
+lzw_table_insert_next(LzwTable *table, u16 dataLength, u08* data) {
+    LzwTable *tail = table;
+    while(tail->Next != NULL) tail = tail->Next;
+    
+    LzwTable *newLzwTable = malloc(sizeof(LzwTable));
+    
+    newLzwTable->Code = tail->Code + 1;
+    newLzwTable->Length = dataLength;
+    newLzwTable->Data = data;
+    
+    newLzwTable->Previous = tail;
+    newLzwTable->Next = NULL;
+    
+    return newLzwTable;
+}
+
+static inline LzwTable *
+lzw_table_make(u16 colorCount) {
+    u16 codeCount = colorCount + 2;
+    LzwTable *codes = malloc(sizeof(LzwTable) * codeCount);
+    
+    LzwTable *previous = NULL;
+    for(u32 i = 0; i < codeCount; ++i) {
+        LzwTable *current = codes + i;
+        
+        current->Code = i;
+        if(i < colorCount) {
+            current->Length = 1;
+            current->Data = malloc(sizeof(u08));
+            current->Data[0] = i;
+        } else {
+            current->Length = 0;
+        }
+        
+        current->Previous = previous;
+        current->Next = NULL;
+        
+        if(previous != NULL) {
+            previous->Next = current;
+        }
+        
+        previous = current;
+    }
+    
+    return previous;
+}
+
+static inline void
+lzw_table_print_value(LzwTable *code) {
+    printf("%3x: ", code->Code);
+    for(u16 i = 0; i < code->Length; ++i) {
+        printf("%2x ", code->Data[i]);
+    }
+    printf("\n");
+}
+
+const u32 PowersOfTwo[17] = {
     0x000001 << 0,
     0x000001 << 1,
     0x000001 << 2,
@@ -103,16 +175,27 @@ const u32 powers[17] = {
     0x000001 << 16,
 };
 
+static inline u08
+bits_in_code(u16 code) {
+    u08 counter = 0;
+    while(code != 0) {
+        code >>= 1;
+        ++counter;
+    }
+    
+    return counter;
+}
+
 static inline u16
 readbits(u08 **data, u08 bits, u08 *bitPosition) {
     u16 result = 0;
     
     for (s16 i = 0; i < bits; i++) {
-        u08 bitMask = powers[*bitPosition];
+        u08 bitMask = PowersOfTwo[*bitPosition];
         u08 value = **data & bitMask;
         
         if(value)
-            result |= powers[i];
+            result |= PowersOfTwo[i];
         
         
         if (*bitPosition + 1 > 7) {
@@ -127,24 +210,106 @@ readbits(u08 **data, u08 bits, u08 *bitPosition) {
 }
 
 static inline s32
-decode_lzw_block(LzwBlock *block) {
-    u08 *bits = block->Data;
-    u08 position = 0;
+read_lzw_block(FILE *file, LzwBlock *block) {
+    u08 bytesRead = fread(&block->MinimumCodeSize, sizeof(u08), 1, file);
+    if(!bytesRead) return 0;
+    block->CodeSize = block->MinimumCodeSize;
     
-    u16 result = readbits(&bits, 9, &position);
-    printf("%x\n", result);
-    result = readbits(&bits, 9, &position);
-    printf("%x\n", result);
+    bytesRead = fread(&block->Length, sizeof(u08), 1, file);
+    if(!bytesRead) return 0;
+    
+    u08* data = malloc(sizeof(u08) * block->Length);
+    bytesRead = fread(data, sizeof(u08), block->Length, file);
+    if(bytesRead != block->Length) return 0;
+    block->Data = data;
     
     return 1;
 }
 
-#define CODECOUNT 4096
 static inline void
-gif_decompress(u08* input, s16  length, s16 codeSize, u08* output) {
-    u16 codeTable[65536];
+decode_lzw_block(LzwBlock *block, Rgb *palette, u16 paletteSize, RgbQuad **output) {
+    LzwTable *table = lzw_table_make(paletteSize);
+    block->CodeSize = bits_in_code(table->Code);
+    u16 clearLzwTable = paletteSize, endLzwTable = paletteSize + 1;
     
-    // Populate the codetable
+    u08 *data = block->Data;
+    u08 bitPosition = 0;
+    
+    LzwTable *localCode = NULL;
+    for(;;) {
+        u16 value = readbits(&data, block->CodeSize, &bitPosition);
+        LzwTable *current = lzw_table_find(table, value);
+        
+        // NOTE: The code does not exist in the table
+        if(current == NULL) {
+            u16 dataSize = 1 + localCode->Length;
+            u08* data = malloc(sizeof(u08) * dataSize);
+            memcpy(data, localCode->Data, localCode->Length);
+            data[dataSize - 1] = localCode->Data[0];
+            
+            localCode = table = lzw_table_insert_next(table, dataSize, data);
+            block->CodeSize = MAX(block->MinimumCodeSize, bits_in_code(table->Code));
+            
+            for(u16 i = 0; i < table->Length; ++i) {
+                Rgb tableEntry = palette[table->Data[i]];
+                RgbQuad rgb = {
+                    .Red = tableEntry.Red,
+                    .Green = tableEntry.Green,
+                    .Blue = tableEntry.Blue,
+                    .Alpha = 0xFF
+                };
+                
+                **output = rgb;
+                ++(*output);
+            }
+        }
+        // NOTE: LzwTable doest exist in table
+        else {
+            if(current->Code == endLzwTable) break;
+            if(current->Code == clearLzwTable) {
+                table = lzw_table_make(paletteSize);
+                block->CodeSize = bits_in_code(table->Code);
+                
+                localCode = NULL;
+                continue;
+            }
+            
+            for(u16 i = 0; i < current->Length; ++i) {
+                Rgb currentEntry = palette[current->Data[i]];
+                RgbQuad rgb = {
+                    .Red = currentEntry.Red,
+                    .Green = currentEntry.Green,
+                    .Blue = currentEntry.Blue,
+                    .Alpha = 0xFF
+                };
+                
+                **output = rgb;
+                ++(*output);
+            }
+            
+            // Non-special codes
+            if(localCode != NULL) {
+                u16 dataSize = 1 + localCode->Length;
+                u08* data = malloc(sizeof(u08) * dataSize);
+                memcpy(data, localCode->Data, localCode->Length);
+                data[dataSize - 1] = current->Data[0];
+                
+                table = lzw_table_insert_next(table, dataSize, data);
+                block->CodeSize = MAX(block->MinimumCodeSize, bits_in_code(table->Code));
+            }
+            
+            localCode = current;
+        }
+    }
+    
+    // Free memory used by the table
+    for(;;) {
+        free(localCode->Data);
+        
+        if(localCode->Previous == NULL) break;
+        localCode = localCode->Previous;
+    }
+    free(localCode);
 }
 
 static inline u08*
@@ -173,31 +338,41 @@ gif_load(FILE* file, s32* width, s32* height) {
     printf("    Map:         0x%2x\n", screen.ColorMap);
     
     // NOTE: Read the colormap
-    u08 bpp = screen.Info.MapSize + 1;
-    u16 colorCount = pow(2, bpp) * screen.Info.GlobalMap;
-    Rgb* globalColorMap = malloc(sizeof(Rgb) * colorCount);
-    s32 colorsRead = fread(globalColorMap, sizeof(Rgb), colorCount, file);
-    if (colorsRead != colorCount) return NULL;
+    Rgb *globalColorMap = NULL;
+    u16 globalColorMapSize = 0;
     
-    printf("  Global color map:\n");
-    printf("    Colors: %i\n", colorCount);
-    for(u16 c = 0; c < colorCount; c++) {
-        Rgb* color = globalColorMap + c;
-        printf("    %3i: %2x%2x%2x\n", c, color->Red, color->Green, color->Blue);
+    if(screen.Info.GlobalMap) {
+        // TODO: Use the BPP to figure out how much data to read (this won't work if BPP is not 8)
+        u08 bpp = screen.Info.Bpp + 1;
+        globalColorMapSize = pow(2, screen.Info.MapSize + 1);
+        
+        globalColorMap = malloc(sizeof(Rgb) * globalColorMapSize);
+        s32 colorsRead = fread(globalColorMap, sizeof(Rgb), globalColorMapSize, file);
+        if (colorsRead != globalColorMapSize) return NULL;
+        
+        printf("  Global color map:\n");
+        printf("    Colors: %i\n", globalColorMapSize);
+        for(u16 c = 0; c < globalColorMapSize; c++) {
+            Rgb* color = globalColorMap + c;
+            //printf("    %3i: %2x%2x%2x\n", c, color->Red, color->Green, color->Blue);
+        }
     }
+    else
+        printf("    No Global color map\n");
     
     // NOTE: Resulting image data
-    *width = screen.Width;
+    *width = screen.Width; 
     *height = screen.Height;
-    u64 resultSize = *width * *height;
+    u64 resultSize = screen.Width * screen.Height;
+    
     // TODO: Use something else than RgbQuad, or move RgbQuad out of bitmap.h
     u08* resultData = malloc(resultSize * sizeof(RgbQuad));
     RgbQuad* resultRgb = (RgbQuad*) resultData;
     
     // NOTE: Set all colors in the output to the background color
     RgbQuad* result = resultRgb;
-    for (s16 x = 0; x < *width; x++) {
-        for (s16 y = 0; y < *height; y++) {
+    for (s16 x = 0; x < screen.Width; x++) {
+        for (s16 y = 0; y < screen.Height; y++) {
             // TODO: Refactor out function to get color from palette (to account for invalid indexes)
             Rgb* color = globalColorMap + screen.Background;
             result->Red = color->Red;
@@ -278,7 +453,7 @@ gif_load(FILE* file, s32* width, s32* height) {
         printf("      CodeSize:        %u\n", lzw.CodeSize);
         printf("      Length:          %u\n", lzw.Length);
         
-        decode_lzw_block(&lzw);
+        decode_lzw_block(&lzw, globalColorMap, globalColorMapSize, &resultRgb);
         
         // TODO: Handle when more LZW blocks follow
         // NOTE: The final byte after the LZW data should be 0x00
@@ -291,9 +466,7 @@ gif_load(FILE* file, s32* width, s32* height) {
     
     u08 final = 0;
     fread(&final, sizeof(u08), 1, file);
-    printf("Final %x\n", final);
-    
-    free(globalColorMap);
+    printf("EOF %x\n", final);
     
     return resultData;
 }

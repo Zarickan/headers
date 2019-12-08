@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="src\gif.h" />
+    <ClInclude Include="src\heaps.h" />
+    <ClInclude Include="src\ico.h" />
+    <ClInclude Include="src\linkedlist.h" />
+    <ClInclude Include="src\list.h" />
+    <ClInclude Include="src\memory.h" />
+    <ClInclude Include="src\stack.h" />
+    <ClInclude Include="src\types.h" />
+    <ClInclude Include="src\bitmap.h" />
+    <ClInclude Include="src\color.h" />
+    <ClInclude Include="src\cur.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.c" />
+  </ItemGroup>
+</Project>
