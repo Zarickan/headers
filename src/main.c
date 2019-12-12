@@ -5,29 +5,32 @@
 #include "bitmap.h"
 #include "gif.h"
 
+#pragma warning(disable:4996)
+
 void
 gif_test(void) {
     char* images[] = {
         //"gif/valid/sample.gif",
-        "gif/valid/small.gif"
-            /*
-    "gif/valid/sunflower.gif",
-    "gif/valid/morph.gif",
-    "gif/valid/newton.gif",
-    "gif/valid/oil.gif",
-    "gif/valid/fullcolor.gif",
-    "gif/valid/quilt.gif",
-    "gif/valid/globe.gif",
-    */
+        //"gif/valid/small.gif",
+        "gif/valid/uncompressed.gif",
+        /*
+"gif/valid/sunflower.gif",
+"gif/valid/morph.gif",
+"gif/valid/newton.gif",
+"gif/valid/oil.gif",
+"gif/valid/fullcolor.gif",
+"gif/valid/quilt.gif",
+"gif/valid/globe.gif",
+*/
     };
     
     char outputFile[500];
     u16 imageCount = sizeof(images) / sizeof(char*);
     for (u16 i = 0; i < imageCount; i++) {
-        strcpy(outputFile, "");
-        strcat(outputFile, "gif/output/");
-        strcat(outputFile,  strstr(strstr(images[i], "/") + 1, "/") + 1);
-        strcat(outputFile, ".bmp");
+        strncpy(outputFile, "", 500);
+        strncat(outputFile, "gif/output/", 500);
+        strncat(outputFile,  strstr(strstr(images[i], "/") + 1, "/") + 1, 500);
+        strncat(outputFile, ".bmp", 500);
         
         printf("\nImage: %s\n", images[i]);
         
