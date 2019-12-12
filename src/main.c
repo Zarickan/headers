@@ -12,9 +12,10 @@ gif_test(void) {
     char* images[] = {
         //"gif/valid/sample.gif",
         //"gif/valid/small.gif",
-        "gif/valid/uncompressed.gif",
-        /*
-"gif/valid/sunflower.gif",
+        //"gif/valid/small2.gif",
+        //"gif/valid/uncompressed.gif",
+		"gif/valid/sunflower.gif",
+		/*
 "gif/valid/morph.gif",
 "gif/valid/newton.gif",
 "gif/valid/oil.gif",

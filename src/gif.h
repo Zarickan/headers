@@ -136,11 +136,15 @@ typedef struct lzw_table {
 typedef struct lzw_context
 {
 	struct lzw_table *table;
+	struct lzw_table *local;
 
 	u08 minimumCodeSize, currentCodeSize;
 	LzwCode clearCode, endCode, nextCode;
 
 	u16 paletteSize;
+	Rgb *palette;
+
+	RgbQuad **output;
 
 	u32 dataSize;
 	u08 *data;
@@ -148,20 +152,14 @@ typedef struct lzw_context
 } LzwContext;
 
 static void
-lzw_ctx_create(struct lzw_context *ctx, LzwBlock *block, u16 paletteSize) {
+lzw_ctx_init(struct lzw_context *ctx, Rgb *palette, u16 paletteSize, RgbQuad **output) {
 	ctx->table = NULL;
+	ctx->local = NULL;
 
-	ctx->data = block->data;
-	ctx->dataSize = block->dataSize;
-	ctx->dataBitPosition = 0;
-
+	ctx->palette = palette;
 	ctx->paletteSize = paletteSize;
-	ctx->minimumCodeSize = block->MinimumCodeSize;
-	ctx->currentCodeSize = block->MinimumCodeSize + 1;
 
-	ctx->clearCode = PowersOfTwo[ctx->minimumCodeSize];
-	ctx->endCode = ctx->clearCode + 1;
-	ctx->nextCode = ctx->endCode + 1;
+	ctx->output = output;
 }
 
 static void
@@ -255,22 +253,22 @@ lzw_ctx_insert_next_code(struct lzw_context *ctx, u08 *data, const u16 dataSize)
 }
 
 static void
-lzw_ctx_insert_unknown(struct lzw_context *ctx, struct lzw_table *local) {
-	const u16 dataSize = local->dataSize + 1;
+lzw_ctx_insert_unknown(struct lzw_context *ctx) {
+	const u16 dataSize = ctx->local->dataSize + 1;
 	u08 *data = malloc(sizeof(u08) * dataSize);
 
-	memcpy(data, local->data, local->dataSize);
-	data[dataSize - 1] = local->data[0];
+	memcpy(data, ctx->local->data, ctx->local->dataSize);
+	data[dataSize - 1] = ctx->local->data[0];
 
 	lzw_ctx_insert_next_code(ctx, data, dataSize);
 }
 
 static void
-lzw_ctx_insert_known(struct lzw_context *ctx, struct lzw_table *local, struct lzw_table *current) {
-	const u16 dataSize = local->dataSize + 1;
+lzw_ctx_insert_known(struct lzw_context *ctx, struct lzw_table *current) {
+	const u16 dataSize = ctx->local->dataSize + 1;
 	u08 *data = malloc(sizeof(u08) * dataSize);
 
-	memcpy(data, local->data, local->dataSize);
+	memcpy(data, ctx->local->data, ctx->local->dataSize);
 	data[dataSize - 1] = current->data[0];
 
 	lzw_ctx_insert_next_code(ctx, data, dataSize);
@@ -286,11 +284,11 @@ print_node(struct lzw_table *node) {
 }
 
 static void
-lzw_ctx_write_node_to_buffer(struct lzw_table *node, Rgb *palette, u16 paletteSize, RgbQuad **output) {
+lzw_ctx_write_node_to_buffer(struct lzw_context *ctx, struct lzw_table *node) {
 	for (u16 i = 0; i < node->dataSize; ++i) {
-		printf("Outputting: %x\n", node->data[i]);
+		//printf("Outputting: %x\n", node->data[i]);
 
-		const Rgb paletteColor = palette[node->data[i]];
+		const Rgb paletteColor = ctx->palette[node->data[i]];
 		const RgbQuad rgb = {
 			.Blue = paletteColor.Blue,
 			.Green = paletteColor.Green,
@@ -298,59 +296,64 @@ lzw_ctx_write_node_to_buffer(struct lzw_table *node, Rgb *palette, u16 paletteSi
 			.Alpha = 0xFF
 		};
 
-		**output = rgb;
-		++(*output);
+		**ctx->output = rgb;
+		++(*ctx->output);
 	}
 	
 }
 
 static void
-lzw_block_decode(struct lzw_block *block, Rgb *palette, u16 paletteSize, RgbQuad **output) {
-	struct lzw_context context;
-	lzw_ctx_create(&context, block, paletteSize);
+lzw_block_decode(struct lzw_context *ctx, struct lzw_block *block) {
+	// Setup the context
+	ctx->data = block->data;
+	ctx->dataSize = block->dataSize;
+	ctx->dataBitPosition = 0;
 
-	s32 c = 0;
-	for(struct lzw_table *local = NULL; context.data - block->data < block->dataSize;) {
-		const LzwCode code = read_bits(&context.data, context.currentCodeSize, &context.dataBitPosition);
-		printf("\nRead %3x (codesize %i) read %2x\n", code, context.currentCodeSize, ++c);
+	ctx->minimumCodeSize = block->MinimumCodeSize;
+	ctx->currentCodeSize = block->MinimumCodeSize + 1;
+
+	ctx->clearCode = PowersOfTwo[ctx->minimumCodeSize];
+	ctx->endCode = ctx->clearCode + 1;
+	ctx->nextCode = ctx->endCode + 1;
+
+	// Do the decoding
+	for(; ctx->data - block->data < block->dataSize;) {
+		const LzwCode code = read_bits(&ctx->data, ctx->currentCodeSize, &ctx->dataBitPosition);
+		//printf("\nRead %3x (codesize %i) read %2x\n", code, context.currentCodeSize, ++c);
 
 		// END / CLEAR
-		if (code == context.endCode) {
+		if (code == ctx->endCode) {
 			printf("END\n");
 			break;
 		}
-		if(code == context.clearCode) {
+		if(code == ctx->clearCode) {
 			printf("CLEAR\n");
-			lzw_ctx_create_table(&context);
-			local = NULL;
+			lzw_ctx_create_table(ctx);
 
 			continue;
 		}
 		
-		struct lzw_table *current = lzw_ctx_find_code(&context, code);
+		struct lzw_table *current = lzw_ctx_find_code(ctx, code);
 
 		// Unknown code
 		if(current == NULL) {
-			lzw_ctx_insert_unknown(&context, local);
-			print_node(context.table);
+			lzw_ctx_insert_unknown(ctx);
+			print_node(ctx->table);
+			lzw_ctx_write_node_to_buffer(ctx, ctx->table);
 
-			lzw_ctx_write_node_to_buffer(context.table, palette, paletteSize, output);
-
-			local = context.table;
+			ctx->local = ctx->table;
 			continue;
 		}
 
 		// Known code
-		if (local != NULL) {
-			lzw_ctx_insert_known(&context, local, current);
-			print_node(context.table);
+		if (ctx->local != NULL) {
+			lzw_ctx_insert_known(ctx, current);
+			print_node(ctx->table);
 		}
 
-		local = current;
-		lzw_ctx_write_node_to_buffer(local, palette, paletteSize, output);
+		ctx->local = current;
+		lzw_ctx_write_node_to_buffer(ctx, ctx->local);
 	}
-
-	//lzw_ctx_free(&context);
 }
 
 // ------------------------------------------------------------------------------------------
@@ -495,23 +498,25 @@ gif_load(FILE* file, s32* width, s32* height) {
             printf("    No local color map\n");
 
 		// Read chunks of lzw data
+		struct lzw_context context;
+		lzw_ctx_init(&context, globalColorMap, globalColorMapSize, &resultRgb);
+
 		u08 buffer[255];
-		u08 minimumCodeSize, chunkSize ;
-		fread(&minimumCodeSize, sizeof(u08), 1, file);
+		struct lzw_block block = { .data = buffer };
+		fread(&block.MinimumCodeSize, sizeof(u08), 1, file);
+
 		printf("    LzwChunks:\n");
-		printf("      MinimumCodeSize:          %u\n", minimumCodeSize);
+		printf("      MinimumCodeSize: %3u\n", block.MinimumCodeSize);
 
-		struct lzw_block block = { .MinimumCodeSize = minimumCodeSize };
-		do {
-			fread(&chunkSize, sizeof(u08), 1, file);
-			printf("      Chunk:          %u\n", chunkSize);
-			fread(&buffer, sizeof(u08), chunkSize, file);
-
-			block.data = buffer;
-			block.dataSize = chunkSize;
-			lzw_block_decode(&block, globalColorMap, globalColorMapSize, &resultRgb);
-		} while (chunkSize != 0);
-		printf("  EOI: %x\n", chunkSize);
+		fread(&block.dataSize, sizeof(u08), 1, file);
+		while (block.dataSize != 0) {
+			fread(&buffer, sizeof(u08), block.dataSize, file);
+			printf("      Chunk:           %3u\n", block.dataSize);
+			
+			lzw_block_decode(&context, &block);
+			fread(&block.dataSize, sizeof(u08), 1, file);
+		}
+		printf("  EOI: %x\n", block.dataSize);
         
         // TODO: Free what we allocate
     } while (seperator == 0x3B);
